@@ -1,0 +1,18 @@
+﻿{
+  "to": "918891348326",
+  "template": "wa_order_confirmation_with_measure",
+  "language": "en",
+  "components": [
+    {
+      "type": "body",
+      "parameters": [
+        { "type": "text", "text": "Test Customer" },
+        { "type": "text", "text": "ORDER-TEST" },
+        { "type": "text", "text": "2026-01-04" },
+        { "type": "text", "text": "Item A x1" },
+        { "type": "text", "text": "Garment" },
+        { "type": "text", "text": "Notes" }
+      ]
+    }
+  ]
+}

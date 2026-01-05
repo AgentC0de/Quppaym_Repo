@@ -1,0 +1,187 @@
+@import '@fontsource/playfair-display/400.css';
+@import '@fontsource/playfair-display/500.css';
+@import '@fontsource/playfair-display/600.css';
+@import '@fontsource/playfair-display/700.css';
+@import '@fontsource/inter/300.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Quppayam Luxury Palette */
+    --background: 36 33% 97%;
+    --foreground: 345 35% 15%;
+
+    --card: 36 33% 99%;
+    --card-foreground: 345 35% 15%;
+
+    --popover: 36 33% 99%;
+    --popover-foreground: 345 35% 15%;
+
+    /* Deep Maroon Primary */
+    --primary: 345 60% 28%;
+    --primary-foreground: 36 33% 97%;
+
+    /* Warm Cream Secondary */
+    --secondary: 36 30% 92%;
+    --secondary-foreground: 345 35% 20%;
+
+    /* Muted tones */
+    --muted: 36 20% 90%;
+    --muted-foreground: 345 15% 45%;
+
+    /* Gold Accent */
+    --accent: 42 70% 50%;
+    --accent-foreground: 345 35% 10%;
+
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 36 20% 85%;
+    --input: 36 20% 88%;
+    --ring: 345 60% 28%;
+
+    --radius: 0.5rem;
+
+    /* Custom Quppayam tokens */
+    --gold: 42 70% 50%;
+    --gold-light: 42 60% 75%;
+    --maroon-light: 345 40% 45%;
+    --cream: 36 33% 97%;
+    --cream-dark: 36 25% 90%;
+    --charcoal: 345 20% 20%;
+
+    /* Shadows */
+    --shadow-soft: 0 2px 8px -2px hsl(345 35% 15% / 0.08);
+    --shadow-card: 0 4px 20px -4px hsl(345 35% 15% / 0.1);
+    --shadow-elevated: 0 8px 30px -8px hsl(345 35% 15% / 0.15);
+
+    /* Sidebar */
+    --sidebar-background: 345 60% 28%;
+    --sidebar-foreground: 36 33% 95%;
+    --sidebar-primary: 42 70% 50%;
+    --sidebar-primary-foreground: 345 35% 10%;
+    --sidebar-accent: 345 50% 35%;
+    --sidebar-accent-foreground: 36 33% 97%;
+    --sidebar-border: 345 50% 32%;
+    --sidebar-ring: 42 70% 50%;
+
+    /* Typography */
+    --font-display: 'Playfair Display', serif;
+    --font-body: 'Inter', sans-serif;
+  }
+
+  .dark {
+    --background: 345 30% 8%;
+    --foreground: 36 30% 95%;
+
+    --card: 345 25% 12%;
+    --card-foreground: 36 30% 95%;
+
+    --popover: 345 25% 12%;
+    --popover-foreground: 36 30% 95%;
+
+    --primary: 42 70% 55%;
+    --primary-foreground: 345 35% 10%;
+
+    --secondary: 345 20% 18%;
+    --secondary-foreground: 36 30% 90%;
+
+    --muted: 345 20% 15%;
+    --muted-foreground: 36 20% 60%;
+
+    --accent: 42 70% 50%;
+    --accent-foreground: 345 35% 10%;
+
+    --destructive: 0 60% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 345 20% 20%;
+    --input: 345 20% 18%;
+    --ring: 42 70% 55%;
+
+    --sidebar-background: 345 35% 10%;
+    --sidebar-foreground: 36 30% 95%;
+    --sidebar-primary: 42 70% 55%;
+    --sidebar-primary-foreground: 345 35% 10%;
+    --sidebar-accent: 345 25% 18%;
+    --sidebar-accent-foreground: 36 30% 95%;
+    --sidebar-border: 345 25% 15%;
+    --sidebar-ring: 42 70% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-body);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    @apply tracking-tight;
+  }
+}
+
+@layer components {
+  .luxury-gradient {
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--maroon-light)) 100%);
+  }
+
+  .gold-shimmer {
+    background: linear-gradient(90deg, hsl(var(--gold)) 0%, hsl(var(--gold-light)) 50%, hsl(var(--gold)) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 3s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  .card-luxury {
+    @apply bg-card rounded-lg border border-border/50;
+    box-shadow: var(--shadow-card);
+    transition: box-shadow 0.3s ease, transform 0.3s ease;
+  }
+
+  .card-luxury:hover {
+    box-shadow: var(--shadow-elevated);
+    transform: translateY(-2px);
+  }
+
+  .status-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  .font-body {
+    font-family: var(--font-body);
+  }
+
+  .text-gold {
+    color: hsl(var(--gold));
+  }
+
+  .bg-gold {
+    background-color: hsl(var(--gold));
+  }
+
+  .border-gold {
+    border-color: hsl(var(--gold));
+  }
+}

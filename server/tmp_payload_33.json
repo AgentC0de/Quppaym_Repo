@@ -1,0 +1,144 @@
+﻿{
+    "to":  "918891348326",
+    "template":  "wa_order_confirmation_with_measure",
+    "components":  [
+                       {
+                           "type":  "body",
+                           "parameters":  [
+                                              {
+                                                  "text":  "Test Customer",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL2",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL3",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL4",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL5",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL6",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL7",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL8",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL9",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL10",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL11",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL12",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL13",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL14",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL15",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL16",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL17",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL18",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL19",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL20",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL21",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL22",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL23",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL24",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL25",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL26",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL27",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL28",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL29",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL30",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL31",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL32",
+                                                  "type":  "text"
+                                              },
+                                              {
+                                                  "text":  "VAL33",
+                                                  "type":  "text"
+                                              }
+                                          ]
+                       }
+                   ],
+    "language":  "en"
+}

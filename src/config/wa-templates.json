@@ -1,0 +1,24 @@
+{
+  "wa_work_initiation": {
+    "parameters": [
+      "customer.name",
+      "order.order_number"
+    ]
+  }
+  ,
+  "wa_order_ready": {
+    "parameters": [
+      "customer.name",
+      "order.order_number",
+      "store.address",
+      "gps"
+    ]
+  }
+  ,
+  "feedback": {
+    "parameters": [
+      "customer.name",
+      "feedback_link"
+    ]
+  }
+}
