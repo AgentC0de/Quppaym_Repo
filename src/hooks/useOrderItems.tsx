@@ -132,10 +132,81 @@ export function useOrderItems(orderId: string | undefined) {
     },
   });
 
+  const addOrderItem = useMutation({
+    mutationFn: async (item: {
+      order_id: string;
+      description: string;
+      unit_price: number;
+      quantity: number;
+      total_price: number;
+      inventory_id?: string | null;
+      measurement_id?: string | null;
+      is_custom_work?: boolean;
+    }) => {
+      const { data, error } = await supabase
+        .from("order_items")
+        .insert(item)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["order-items", orderId] });
+      toast({ title: "Item added", description: "The item was added to the order." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const removeOrderItem = useMutation({
+    mutationFn: async (itemId: string) => {
+      const { data, error } = await supabase
+        .from("order_items")
+        .delete()
+        .eq("id", itemId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["order-items", orderId] });
+      toast({ title: "Item removed", description: "The item was removed from the order." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateOrderItemQuantity = useMutation({
+    mutationFn: async ({ itemId, quantity }: { itemId: string; quantity: number }) => {
+      const { data, error } = await supabase
+        .from("order_items")
+        .update({ quantity })
+        .eq("id", itemId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["order-items", orderId] });
+      toast({ title: "Quantity updated", description: "The item quantity has been updated." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   return {
     items,
     isLoading,
     error,
     updateOrderItemMeasurement,
+    addOrderItem,
+    removeOrderItem,
+    updateOrderItemQuantity,
   };
 }

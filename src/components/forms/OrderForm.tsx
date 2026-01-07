@@ -3,6 +3,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
+import { formatToE164 } from "@/lib/phone";
+import { waFetch } from "@/lib/wa";
+import { waInfo, waWarn, waError } from "@/lib/logger";
 import { CalendarIcon, Plus, Trash2, AlertCircle, Search, Barcode, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -340,7 +343,17 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
                   ? format(new Date(createdOrder.created_at), "yyyy-MM-dd")
                   : "";
 
-                const waUrl = import.meta.env.VITE_WA_PROXY_URL || "http://localhost:4001";
+                // Prefer local proxy when developing on localhost
+                function getWaUrl() {
+                  const envUrl = import.meta.env.VITE_WA_PROXY_URL || "";
+                  const forceRemote = (import.meta.env.VITE_WA_FORCE_REMOTE as string) === "true";
+                  if (!forceRemote && import.meta.env.DEV && typeof window !== "undefined") {
+                    const host = window.location.hostname;
+                    if (host === "localhost" || host === "127.0.0.1") return "http://localhost:4001";
+                  }
+                  return envUrl || "http://localhost:4001";
+                }
+                const waUrl = getWaUrl();
 
                 if (customer && customer.phone) {
                   const components = [
@@ -357,21 +370,30 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
                     },
                   ];
 
-                  await fetch(`${waUrl}/api/whatsapp/send`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      to: `whatsapp:${customer.phone}`,
-                      template: "order_confirmation",
-                      language: "en",
-                      components,
-                    }),
-                  });
+                  const rawPhone = customer.phone || "";
+                  const toPhone = formatToE164(rawPhone);
+                  if (!toPhone) {
+                    waInfo('OrderForm: skipping WA send, invalid phone', { rawPhone, orderId: createdOrder.id });
+                  } else {
+                    try {
+                      await waFetch(`${waUrl}/api/whatsapp/send`, {
+                        method: "POST",
+                        body: JSON.stringify({
+                          to: toPhone,
+                          template: "order_confirmation",
+                          language: "en",
+                          components,
+                        }),
+                      });
+                      waInfo('order_confirmation sent', { to: toPhone, orderId: createdOrder.id });
+                    } catch (err) {
+                      waWarn('order_confirmation send failed', { err: err && err.message ? err.message : err });
+                    }
+                  }
                 }
               } catch (err) {
                 // don't block user flow; just log
-                // eslint-disable-next-line no-console
-                console.error("WhatsApp send error:", err);
+                waError('WhatsApp send error', err && err.message ? err.message : err);
               }
           }
           
@@ -738,6 +760,23 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
                 placeholder="Search products or enter SKU..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  const q = (searchQuery || '').trim();
+                  if (!q) return;
+                  // Try exact SKU match
+                  const found = inventory.find((it) => (it.sku || '').toLowerCase() === q.toLowerCase());
+                  if (found) {
+                    handleAddProduct(found);
+                    return;
+                  }
+                  // If only one filtered result, add it
+                  if (filteredInventory.length === 1) {
+                    handleAddProduct(filteredInventory[0]);
+                    return;
+                  }
+                  toast({ title: 'Not found', description: `No product found for SKU "${q}"` });
+                }}
                 className="pl-9 pr-10"
                 autoFocus
               />

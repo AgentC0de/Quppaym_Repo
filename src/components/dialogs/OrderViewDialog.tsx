@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format } from "date-fns";
-import { Crown, Phone, Calendar, Store, User, Trash2, CreditCard, RotateCcw, Plus, ArrowDownCircle, ArrowUpCircle, ChevronDown, ChevronUp, Package, Receipt } from "lucide-react";
+import { Crown, Phone, Calendar, Store, User, Trash2, CreditCard, RotateCcw, Plus, ArrowDownCircle, ArrowUpCircle, ChevronDown, ChevronUp, Package, Receipt, Barcode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -31,6 +31,8 @@ import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
 import { useOrders } from "@/hooks/useOrders";
 import { usePaymentHistory } from "@/hooks/usePaymentHistory";
 import { useOrderItems } from "@/hooks/useOrderItems";
+import { useInventory } from "@/hooks/useInventory";
+import { useToast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
 
 type Order = Database["public"]["Tables"]["orders"]["Row"];
@@ -52,9 +54,12 @@ export function OrderViewDialog({ order, open, onOpenChange }: OrderViewDialogPr
   const [showOrderItems, setShowOrderItems] = useState(true);
   const [paymentAmount, setPaymentAmount] = useState<string>("");
   const [refundAmount, setRefundAmount] = useState<string>("");
+  const [scanQuery, setScanQuery] = useState("");
   const { updateOrder, deleteOrder } = useOrders();
   const { payments, recordPayment, netReceived } = usePaymentHistory(order?.id);
-  const { items: orderItems } = useOrderItems(order?.id);
+  const { items: orderItems, addOrderItem } = useOrderItems(order?.id as string | undefined);
+  const { inventory } = useInventory();
+  const { toast } = useToast();
 
   const handleClose = () => {
     onOpenChange(false);
@@ -189,6 +194,64 @@ export function OrderViewDialog({ order, open, onOpenChange }: OrderViewDialogPr
                     </Button>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="space-y-2 pt-2">
+                    {/* SKU / Barcode scan input - scanners act as keyboard and usually send Enter */}
+                    <div className="mb-2">
+                      <label className="text-xs text-muted-foreground">Scan SKU or enter SKU</label>
+                      <div className="relative mt-1">
+                        <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Scan SKU or enter SKU and press Enter"
+                          value={scanQuery}
+                          onChange={(e) => setScanQuery(e.target.value)}
+                          className="pl-9"
+                          onKeyDown={async (e) => {
+                            if (e.key !== 'Enter') return;
+                            const q = (scanQuery || '').trim();
+                            if (!q) return;
+                            if (!order || !order.id) {
+                              toast({ title: 'Order not available', description: 'Cannot add item to unknown order', variant: 'destructive' });
+                              return;
+                            }
+
+                            // Try exact SKU match first
+                            const found = inventory.find((it: any) => (it.sku || '').toLowerCase() === q.toLowerCase());
+                            let itemToAdd = found;
+
+                            // If no exact match, but search would return single item, use it
+                            if (!itemToAdd) {
+                              const matches = inventory.filter((it: any) => {
+                                const sku = (it.sku || '').toLowerCase();
+                                const name = (it.name || '').toLowerCase();
+                                return sku.includes(q.toLowerCase()) || name.includes(q.toLowerCase());
+                              });
+                              if (matches.length === 1) itemToAdd = matches[0];
+                            }
+
+                            if (!itemToAdd) {
+                              toast({ title: 'Not found', description: `No product found for SKU "${q}"` });
+                              return;
+                            }
+
+                            try {
+                              await addOrderItem.mutateAsync({
+                                order_id: order.id,
+                                description: itemToAdd.name,
+                                unit_price: Number(itemToAdd.price) || 0,
+                                quantity: 1,
+                                total_price: Number(itemToAdd.price) || 0,
+                                inventory_id: itemToAdd.id,
+                                measurement_id: null,
+                                is_custom_work: false,
+                              });
+                              setScanQuery("");
+                              toast({ title: 'Added', description: `${itemToAdd.name} added to order` });
+                            } catch (err: any) {
+                              toast({ title: 'Error', description: err?.message || 'Failed to add item', variant: 'destructive' });
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
                     {orderItems.length > 0 ? (
                       orderItems.map((item: any) => (
                         <div key={item.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/30 border border-border">

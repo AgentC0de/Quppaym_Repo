@@ -1,5 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { formatToE164 } from "@/lib/phone";
+import { waFetch } from "@/lib/wa";
+import { waInfo, waWarn, waError } from "@/lib/logger";
 import { useToast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -75,9 +78,24 @@ export function useMeasurements() {
           ? new Date(order.created_at).toISOString().split("T")[0]
           : "";
 
-        const waUrl = (import.meta.env.VITE_WA_PROXY_URL as string) || "http://localhost:4001";
+        // Prefer local proxy in dev when running on localhost
+        function getWaUrl() {
+          const envUrl = (import.meta.env.VITE_WA_PROXY_URL as string) || "";
+          const forceRemote = (import.meta.env.VITE_WA_FORCE_REMOTE as string) === "true";
+          if (!forceRemote && import.meta.env.DEV && typeof window !== "undefined") {
+            const host = window.location.hostname;
+            if (host === "localhost" || host === "127.0.0.1") return "http://localhost:4001";
+          }
+          return envUrl || "http://localhost:4001";
+        }
+        const waUrl = getWaUrl();
 
-        const toPhone = (order.customer?.phone || "").replace(/\D/g, "");
+        const rawPhone = order.customer?.phone || "";
+        const toPhone = formatToE164(rawPhone);
+        if (!toPhone) {
+          waInfo('measurement send: skipping invalid phone', { rawPhone, orderId: order.id });
+          return;
+        }
         if (toPhone) {
           // Template expects positional parameters: name + 32 measurement values
           // Map template placeholders to actual measurement properties.
@@ -143,12 +161,10 @@ export function useMeasurements() {
           const components = [{ type: "body", parameters: params }];
 
           // Log send attempt (non-blocking)
-          // eslint-disable-next-line no-console
-          console.info("Sending WA measurement template", { to: toPhone, paramsCount: params.length });
+          waInfo('sending measurement template', { to: toPhone, paramsCount: params.length });
 
-          const resp = await fetch(`${waUrl}/api/whatsapp/send`, {
+          const resp = await waFetch(`${waUrl}/api/whatsapp/send`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               to: toPhone,
               template: "wa_order_confirmation_with_measure",
@@ -161,15 +177,13 @@ export function useMeasurements() {
           resp
             .text()
             .then((t) => {
-              // eslint-disable-next-line no-console
-              console.info("WA proxy response:", resp.status, t);
+              waInfo('measurement send response', { status: resp.status });
             })
             .catch(() => {});
         }
       } catch (err) {
         // non-blocking: just log
-        // eslint-disable-next-line no-console
-        console.error("WhatsApp send error (measurement):", err);
+        waError('WhatsApp send error (measurement)', err && err.message ? err.message : err);
       }
     },
     onError: (error: Error) => {

@@ -1,5 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { formatToE164 } from "@/lib/phone";
+import { waFetch } from "@/lib/wa";
+import { waInfo, waWarn, waError } from "@/lib/logger";
 import { useToast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
 import waTemplates from "@/config/wa-templates.json";
@@ -10,6 +13,22 @@ type OrderInsert = Database["public"]["Tables"]["orders"]["Insert"];
 export function useOrders() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Determine WA proxy URL — prefer local proxy when developing on localhost
+  function getWaUrl() {
+    const envUrl = (import.meta.env.VITE_WA_PROXY_URL as string) || "";
+    // Allow forcing remote function even when on localhost for E2E testing
+    const forceRemote = (import.meta.env.VITE_WA_FORCE_REMOTE as string) === "true";
+    if (!forceRemote && import.meta.env.DEV && typeof window !== "undefined") {
+      const host = window.location.hostname;
+      if (host === "localhost" || host === "127.0.0.1") return "http://localhost:4001";
+    }
+    return envUrl || "http://localhost:4001";
+  }
+
+  
+
+  // Phone formatting moved to shared helper `src/lib/phone.ts`.
 
   const { data: orders = [], isLoading, error } = useQuery({
     queryKey: ["orders"],
@@ -86,18 +105,16 @@ export function useOrders() {
             .single();
 
           if (!orderWithCustomer || ordErr || !orderWithCustomer.customer) {
-            // eslint-disable-next-line no-console
-            console.warn("WA trigger (ready): missing order/customer details", ordErr);
+            waWarn('missing order/customer details (ready)', ordErr);
           } else {
-            const toPhone = (orderWithCustomer.customer.phone || "").replace(/\D/g, "");
-            const waUrl = (import.meta.env.VITE_WA_PROXY_URL as string) || "http://localhost:4001";
+            const rawPhone = orderWithCustomer.customer.phone || "";
+            const toPhone = formatToE164(rawPhone);
+          const waUrl = getWaUrl();
 
             if (!toPhone) {
-              // eslint-disable-next-line no-console
-              console.info("WA trigger (ready): no customer phone for order", orderWithCustomer.id);
+              waInfo('no or invalid customer phone (ready)', { orderId: orderWithCustomer.id });
             } else if ((import.meta.env.VITE_DISABLE_WA as string) === "true") {
-              // eslint-disable-next-line no-console
-              console.info("WA trigger disabled via VITE_DISABLE_WA");
+              waInfo('WA disabled via VITE_DISABLE_WA');
             } else {
               // Use local mapping if present
               const mapping = (waTemplates as any)?.wa_order_ready?.parameters as string[] | undefined;
@@ -129,31 +146,26 @@ export function useOrders() {
                 });
 
                 const components = [{ type: 'body', parameters: params }];
-                // eslint-disable-next-line no-console
-                console.info('WA trigger: sending wa_order_ready using mapping', { to: toPhone, paramsLength: params.length });
-                // confirm before sending
-                // eslint-disable-next-line no-console
-                console.info('WA trigger (ready): sending payload', { to: toPhone, template: 'wa_order_ready', paramsLength: params.length });
+                waInfo('sending wa_order_ready', { to: toPhone, paramsLength: params.length });
+                waInfo('sending payload', { to: toPhone, template: 'wa_order_ready', paramsLength: params.length });
 
-                const resp = await fetch(`${waUrl}/api/whatsapp/send`, {
+                let sendUrl = `${waUrl}/api/whatsapp/send`;
+                const resp = await waFetch(sendUrl, {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ to: toPhone, template: 'wa_order_ready', language: 'en', components }),
                 });
                 const txt = await resp.text().catch(() => null);
-                // eslint-disable-next-line no-console
-                if (resp.ok) {
-                  console.info('WA proxy confirmed wa_order_ready sent', { to: toPhone, status: resp.status, body: txt });
-                } else {
-                  console.warn('WA proxy error sending wa_order_ready', { to: toPhone, status: resp.status, body: txt });
-                }
+                  if (resp.ok) {
+                    waInfo('wa_order_ready sent', { to: toPhone, status: resp.status });
+                  } else {
+                    waWarn('wa_order_ready send failed', { to: toPhone, status: resp.status, body: txt });
+                  }
               } else {
                 // No local mapping — fallback to fetching template definition and building params
                 try {
-                  const tplResp = await fetch(`${waUrl}/api/whatsapp/templates/wa_order_ready?language=en_US`);
+                  const tplResp = await waFetch(`${waUrl}/api/whatsapp/templates/wa_order_ready?language=en_US`);
                   const tplJson = await tplResp.json().catch(() => null);
-                  // eslint-disable-next-line no-console
-                  console.info('WA trigger (ready): template definition response:', tplResp.status, tplJson);
+                  waInfo('template definition response', { status: tplResp.status });
 
                   let expectedParams = 2;
                   try {
@@ -185,34 +197,26 @@ export function useOrders() {
 
                   const components = [{ type: 'body', parameters: params }];
                   const sendPayload = { to: toPhone, template: 'wa_order_ready', language: 'en', components };
-                  // eslint-disable-next-line no-console
-                  console.info('WA trigger (ready): sending fallback payload', { to: toPhone, template: 'wa_order_ready', paramsLength: params.length });
+                  waInfo('sending fallback payload', { to: toPhone, template: 'wa_order_ready', paramsLength: params.length });
 
-                  const resp = await fetch(`${waUrl}/api/whatsapp/send`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(sendPayload),
-                  });
+                  let sendUrl = `${waUrl}/api/whatsapp/send`;
+                  const resp = await waFetch(sendUrl, { method: 'POST', body: JSON.stringify(sendPayload) });
                   if (resp.ok) {
                     const t = await resp.text().catch(() => null);
-                    // eslint-disable-next-line no-console
-                    console.info('WA proxy confirmed wa_order_ready sent (fallback)', { to: toPhone, status: resp.status, body: t });
+                    waInfo('wa_order_ready sent (fallback)', { to: toPhone, status: resp.status });
                   } else {
                     const bodyText = await resp.text().catch(() => null);
-                    // eslint-disable-next-line no-console
-                    console.warn('WA proxy returned error for order_ready (fallback):', resp.status, bodyText);
+                    waWarn('wa_order_ready send failed (fallback)', { status: resp.status, body: bodyText });
                   }
                 } catch (e) {
-                  // eslint-disable-next-line no-console
-                  console.info('WA trigger (ready): proxy unreachable or template fetch failed — skipping WA send', e && e.message ? e.message : e);
+                  waWarn('proxy unreachable or template fetch failed — skipping send', { err: e && e.message ? e.message : e });
                 }
               }
             }
           }
         }
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error("WhatsApp trigger error (ready_for_pickup):", err);
+        waError('WhatsApp trigger error (ready_for_pickup)', err && err.message ? err.message : err);
       }
 
       // Trigger WhatsApp template when status becomes completed (send feedback request)
@@ -225,18 +229,16 @@ export function useOrders() {
             .single();
 
           if (!orderWithCustomer || ordErr || !orderWithCustomer.customer) {
-            // eslint-disable-next-line no-console
-            console.warn("WA trigger (completed): missing order/customer details", ordErr);
+            waWarn('missing order/customer details (completed)', ordErr);
           } else {
-            const toPhone = (orderWithCustomer.customer.phone || "").replace(/\D/g, "");
-            const waUrl = (import.meta.env.VITE_WA_PROXY_URL as string) || "http://localhost:4001";
+            const rawPhone = orderWithCustomer.customer.phone || "";
+            const toPhone = formatToE164(rawPhone);
+          const waUrl = getWaUrl();
 
             if (!toPhone) {
-              // eslint-disable-next-line no-console
-              console.info("WA trigger (completed): no customer phone for order", orderWithCustomer.id);
+              waInfo('no or invalid customer phone (completed)', { orderId: orderWithCustomer.id });
             } else if ((import.meta.env.VITE_DISABLE_WA as string) === "true") {
-              // eslint-disable-next-line no-console
-              console.info("WA trigger disabled via VITE_DISABLE_WA");
+              waInfo('WA disabled via VITE_DISABLE_WA');
             } else {
               const mapping = (waTemplates as any)?.feedback?.parameters as string[] | undefined;
               if (mapping && mapping.length > 0) {
@@ -261,46 +263,39 @@ export function useOrders() {
                 });
 
                 const components = [{ type: 'body', parameters: params }];
-                // eslint-disable-next-line no-console
-                console.info('WA trigger (completed): sending feedback using mapping', { to: toPhone, paramsLength: params.length });
-                const resp = await fetch(`${waUrl}/api/whatsapp/send`, {
+                waInfo('sending feedback using mapping', { to: toPhone, paramsLength: params.length });
+                const resp = await waFetch(`${waUrl}/api/whatsapp/send`, {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ to: toPhone, template: 'feedback', language: 'en', components }),
                 });
                 const txt = await resp.text().catch(() => null);
-                // eslint-disable-next-line no-console
-                if (resp.ok) {
-                  console.info('WA proxy confirmed feedback sent', { to: toPhone, status: resp.status, body: txt });
-                } else {
-                  console.warn('WA proxy error sending feedback', { to: toPhone, status: resp.status, body: txt });
-                }
+                  if (resp.ok) {
+                    waInfo('feedback sent', { to: toPhone, status: resp.status });
+                  } else {
+                    waWarn('feedback send failed', { to: toPhone, status: resp.status, body: txt });
+                  }
               } else {
                 // fallback: build minimal params
                 try {
                   const params = [{ type: 'text', text: orderWithCustomer.customer.name || '' }, { type: 'text', text: 'Required Update' }];
                   const components = [{ type: 'body', parameters: params }];
-                  // eslint-disable-next-line no-console
-                  console.info('WA trigger (completed): sending feedback fallback', { to: toPhone });
-                  const resp = await fetch(`${waUrl}/api/whatsapp/send`, {
+                  waInfo('sending feedback fallback', { to: toPhone });
+                  const resp = await waFetch(`${waUrl}/api/whatsapp/send`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ to: toPhone, template: 'feedback', language: 'en', components }),
                   });
                   const txt = await resp.text().catch(() => null);
-                  if (resp.ok) console.info('WA proxy confirmed feedback sent (fallback)', { to: toPhone, status: resp.status, body: txt });
-                  else console.warn('WA proxy error sending feedback (fallback)', { to: toPhone, status: resp.status, body: txt });
+                  if (resp.ok) waInfo('feedback sent (fallback)', { to: toPhone, status: resp.status });
+                  else waWarn('feedback send failed (fallback)', { to: toPhone, status: resp.status, body: txt });
                 } catch (e) {
-                  // eslint-disable-next-line no-console
-                  console.info('WA trigger (completed): proxy unreachable or template fetch failed — skipping feedback send', e && e.message ? e.message : e);
+                  waWarn('proxy unreachable or template fetch failed — skipping feedback send', { err: e && e.message ? e.message : e });
                 }
               }
             }
           }
         }
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('WhatsApp trigger error (completed):', err);
+        waError('WhatsApp trigger error (completed)', err && err.message ? err.message : err);
       }
 
       // Trigger WhatsApp template when status becomes in_production
@@ -315,24 +310,22 @@ export function useOrders() {
           .single();
 
         if (ordErr || !orderWithCustomer || !orderWithCustomer.customer) {
-          // eslint-disable-next-line no-console
-          console.warn("WA trigger: missing order/customer details", ordErr);
+          waWarn('missing order/customer details (in_production)', ordErr);
           return;
         }
 
-        const toPhone = (orderWithCustomer.customer.phone || "").replace(/\D/g, "");
-        const waUrl = (import.meta.env.VITE_WA_PROXY_URL as string) || "http://localhost:4001";
+        const rawPhone = orderWithCustomer.customer.phone || "";
+        const toPhone = formatToE164(rawPhone);
+        const waUrl = getWaUrl();
 
         if (!toPhone) {
-          // eslint-disable-next-line no-console
-          console.info("WA trigger: no customer phone for order", orderWithCustomer.id);
+          waInfo('no or invalid customer phone (in_production)', { orderId: orderWithCustomer.id });
           return;
         }
 
         // If WA is disabled via env, skip sending
         if ((import.meta.env.VITE_DISABLE_WA as string) === "true") {
-          // eslint-disable-next-line no-console
-          console.info("WA trigger disabled via VITE_DISABLE_WA");
+          waInfo('WA disabled via VITE_DISABLE_WA');
           return;
         }
 
@@ -358,25 +351,18 @@ export function useOrders() {
           const components = [{ type: 'body', parameters: params }];
 
           // send using mapping
-          // eslint-disable-next-line no-console
-          console.info('WA trigger: sending wa_work_initiation using mapping', { to: toPhone, paramsLength: params.length });
-          const resp = await fetch(`${waUrl}/api/whatsapp/send`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ to: toPhone, template: 'wa_work_initiation', language: 'en', components }),
-          });
-          const txt = await resp.text().catch(() => null);
-          // eslint-disable-next-line no-console
-          console.info('WA proxy response (mapping):', resp.status, txt);
+              waInfo('sending wa_work_initiation using mapping', { to: toPhone, paramsLength: params.length });
+                const resp = await waFetch(`${waUrl}/api/whatsapp/send`, { method: 'POST', body: JSON.stringify({ to: toPhone, template: 'wa_work_initiation', language: 'en', components }) });
+              const txt = await resp.text().catch(() => null);
+              waInfo('work_initiation response', { status: resp.status });
           return;
         }
 
         // Attempt to fetch the template definition to determine expected params
         try {
-          const tplResp = await fetch(`${waUrl}/api/whatsapp/templates/wa_work_initiation?language=en_US`);
+          const tplResp = await waFetch(`${waUrl}/api/whatsapp/templates/wa_work_initiation?language=en_US`);
           const tplJson = await tplResp.json().catch(() => null);
-          // eslint-disable-next-line no-console
-          console.info("WA trigger: template definition response:", tplResp.status, tplJson);
+          waInfo('template definition response', { status: tplResp.status });
 
           // Determine expected number of placeholders from template body text
           let expectedParams = 3; // default fallback
@@ -422,8 +408,7 @@ export function useOrders() {
           const components = [{ type: 'body', parameters: params }];
 
           // Debug log before sending
-          // eslint-disable-next-line no-console
-          console.info('WA trigger: sending wa_work_initiation', { to: toPhone, expectedParams, paramsLength: params.length });
+          waInfo('sending wa_work_initiation', { to: toPhone, expectedParams, paramsLength: params.length });
 
           const sendPayload = {
             to: toPhone,
@@ -433,16 +418,11 @@ export function useOrders() {
           };
 
           // send once, if Graph API complains about param count, try to parse expected
-          const resp = await fetch(`${waUrl}/api/whatsapp/send`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(sendPayload),
-          });
+                  const resp = await waFetch(`${waUrl}/api/whatsapp/send`, { method: 'POST', body: JSON.stringify(sendPayload) });
 
           if (resp.ok) {
             const t = await resp.text().catch(() => null);
-            // eslint-disable-next-line no-console
-            console.info('WA proxy response for work initiation:', resp.status, t);
+            waInfo('work initiation response', { status: resp.status });
           } else {
             const bodyText = await resp.text().catch(() => null);
             let parsed = null;
@@ -451,8 +431,7 @@ export function useOrders() {
             } catch (e) {
               parsed = null;
             }
-            // eslint-disable-next-line no-console
-            console.warn('WA proxy returned error for work initiation:', resp.status, parsed || bodyText);
+            waWarn('work initiation send failed', { status: resp.status, body: parsed || bodyText });
 
             // If Graph returned param-mismatch (code 132000), try to extract expected count and retry trimmed params
             const code = parsed?.error?.code ?? parsed?.code;
@@ -463,30 +442,22 @@ export function useOrders() {
               if (expected && expected < params.length) {
                 // trim params to expected and resend
                 const trimmed = params.slice(0, expected);
-                // eslint-disable-next-line no-console
-                console.info('WA trigger: retrying with trimmed params length', expected);
+                waInfo('retrying with trimmed params length', expected);
                 const retryPayload = { ...sendPayload, components: [{ type: 'body', parameters: trimmed }] };
-                const retryResp = await fetch(`${waUrl}/api/whatsapp/send`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(retryPayload),
-                });
+                const retryResp = await waFetch(`${waUrl}/api/whatsapp/send`, { method: 'POST', body: JSON.stringify(retryPayload) });
                 const retryText = await retryResp.text().catch(() => null);
-                // eslint-disable-next-line no-console
-                console.info('WA proxy retry response:', retryResp.status, retryText);
+                waInfo('proxy retry response', { status: retryResp.status });
               }
             }
           }
         } catch (e) {
           // Network or proxy-level error — proxy likely unreachable. Log info and skip send.
-          // eslint-disable-next-line no-console
-          console.info('WA trigger: proxy unreachable or template fetch failed — skipping WA send', e && e.message ? e.message : e);
+          waWarn('proxy unreachable or template fetch failed — skipping WA send', { err: e && e.message ? e.message : e });
           return;
         }
       } catch (err) {
         // non-blocking logging
-        // eslint-disable-next-line no-console
-        console.error("WhatsApp trigger error (in_production):", err);
+        waError('WhatsApp trigger error (in_production)', err && err.message ? err.message : err);
       }
     },
     onError: (error: Error) => {
