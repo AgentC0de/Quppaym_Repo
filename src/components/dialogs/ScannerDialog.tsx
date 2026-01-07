@@ -6,7 +6,8 @@ import { BrowserMultiFormatReader } from "@zxing/browser";
 interface ScannerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onDetected: (code: string) => void;
+  // onDetected should return true if the detected code resulted in adding an item.
+  onDetected: (code: string) => boolean | Promise<boolean>;
 }
 
 export function ScannerDialog({ open, onOpenChange, onDetected }: ScannerDialogProps) {
@@ -30,21 +31,55 @@ export function ScannerDialog({ open, onOpenChange, onDetected }: ScannerDialogP
     readerRef.current = codeReader;
     setScanning(true);
 
-    // Choose first available video device
+    // Start scanning. Prefer the rear/environment camera when possible.
     (async () => {
       try {
-        const devices = await BrowserMultiFormatReader.listVideoInputDevices();
-        const deviceId = devices && devices.length > 0 ? devices[0].deviceId : undefined;
-        await codeReader.decodeFromVideoDevice(deviceId, videoRef.current as HTMLVideoElement, (result, err) => {
-          if (result) {
-            try {
-              onDetected(result.getText());
-            } finally {
-              codeReader.reset();
-              onOpenChange(false);
-            }
+        // Try constraints with facingMode first (works on most mobile browsers)
+        const constraints: MediaStreamConstraints = { video: { facingMode: { ideal: "environment" } } };
+        let started = false;
+        try {
+          // decodeFromConstraints may not be available on all versions; try it and fall back if it fails
+          // @ts-ignore - method exists in @zxing/browser
+          if (typeof codeReader.decodeFromConstraints === "function") {
+            // @ts-ignore
+            await codeReader.decodeFromConstraints(constraints, videoRef.current as HTMLVideoElement, async (result, err) => {
+              if (result) {
+                try {
+                  const added = await Promise.resolve(onDetected(result.getText()));
+                  if (added) {
+                    try { codeReader.reset(); } catch (e) {}
+                    onOpenChange(false);
+                  }
+                } catch (e) {}
+              }
+            });
+            started = true;
           }
-        });
+        } catch (e) {
+          started = false;
+        }
+
+        if (!started) {
+          // Fallback: pick a device that likely corresponds to the rear camera by checking labels
+          const devices = await BrowserMultiFormatReader.listVideoInputDevices();
+          let deviceId: string | undefined = undefined;
+          if (devices && devices.length > 0) {
+            const rear = devices.find((d) => /rear|back|environment|wide|0/i.test(d.label || ""));
+            deviceId = (rear && rear.deviceId) || devices[0].deviceId;
+          }
+
+          await codeReader.decodeFromVideoDevice(deviceId, videoRef.current as HTMLVideoElement, async (result, err) => {
+            if (result) {
+              try {
+                const added = await Promise.resolve(onDetected(result.getText()));
+                if (added) {
+                  try { codeReader.reset(); } catch (e) {}
+                  onOpenChange(false);
+                }
+              } catch (e) {}
+            }
+          });
+        }
       } catch (err) {
         // If something goes wrong, stop scanning and close
         try {

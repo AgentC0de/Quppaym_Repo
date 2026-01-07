@@ -233,11 +233,12 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
       handleAddProduct(itemToAdd);
       toast({ title: 'Added', description: `${itemToAdd.name} added to order` });
       setSearchQuery("");
-      return;
+      return true;
     }
 
     // If no item found, notify
     toast({ title: 'Not found', description: `No product found for SKU "${q}"` });
+    return false;
   };
 
   const [showScanner, setShowScanner] = useState(false);
