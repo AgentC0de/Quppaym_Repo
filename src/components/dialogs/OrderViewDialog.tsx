@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { format } from "date-fns";
-import { Crown, Phone, Calendar, Store, User, Trash2, CreditCard, RotateCcw, Plus, ArrowDownCircle, ArrowUpCircle, ChevronDown, ChevronUp, Package, Receipt, Barcode, Camera } from "lucide-react";
+import { Crown, Phone, Calendar, Store, User, Trash2, CreditCard, RotateCcw, Plus, ArrowDownCircle, ArrowUpCircle, ChevronDown, ChevronUp, Package, Receipt, Barcode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -295,12 +295,19 @@ export function OrderViewDialog({ order, open, onOpenChange }: OrderViewDialogPr
                     <div className="mb-2">
                       <label className="text-xs text-muted-foreground">Scan SKU or enter SKU</label>
                       <div className="relative mt-1">
-                        <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <button
+                          type="button"
+                          aria-label="Open scanner"
+                          onClick={() => startScanner()}
+                          className="absolute left-1 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center text-muted-foreground"
+                        >
+                          <Barcode className="h-4 w-4" />
+                        </button>
                         <Input
                           placeholder="Scan SKU or enter SKU and press Enter"
                           value={scanQuery}
                           onChange={(e) => setScanQuery(e.target.value)}
-                          className="pl-9 pr-20"
+                          className="pl-9"
                           onKeyDown={async (e) => {
                             if (e.key !== 'Enter') return;
                             const q = (scanQuery || '').trim();
@@ -308,19 +315,6 @@ export function OrderViewDialog({ order, open, onOpenChange }: OrderViewDialogPr
                             await addItemBySKU(q);
                           }}
                         />
-
-                        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                          {scannerOpen ? (
-                            <Button size="sm" variant="ghost" onClick={() => stopScanner()}>
-                              Close
-                            </Button>
-                          ) : (
-                            <Button size="sm" variant="outline" onClick={() => startScanner()} className="gap-1">
-                              <Camera className="h-3 w-3" />
-                              <span className="text-xs hidden sm:inline">Camera</span>
-                            </Button>
-                          )}
-                        </div>
                       </div>
                       {scannerOpen && (
                         <div className="mt-2">
