@@ -7,6 +7,7 @@ import { formatToE164 } from "@/lib/phone";
 import { waFetch } from "@/lib/wa";
 import { waInfo, waWarn, waError } from "@/lib/logger";
 import { CalendarIcon, Plus, Trash2, AlertCircle, Search, Barcode, Package } from "lucide-react";
+import { ScannerDialog } from "@/components/dialogs/ScannerDialog";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -209,6 +210,37 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
     setShowProductSearch(false);
     setSearchQuery("");
   };
+
+  // Try add product by query (used by Enter key or scanner)
+  const tryAddByQuery = (raw: string) => {
+    const q = (raw || "").trim();
+    if (!q) return;
+
+    // Try exact SKU match
+    const found = inventory.find((it) => (it.sku || "").toLowerCase() === q.toLowerCase());
+    let itemToAdd = found;
+
+    if (!itemToAdd) {
+      const matches = inventory.filter((it) => {
+        const sku = (it.sku || "").toLowerCase();
+        const name = (it.name || "").toLowerCase();
+        return sku.includes(q.toLowerCase()) || name.includes(q.toLowerCase());
+      });
+      if (matches.length === 1) itemToAdd = matches[0];
+    }
+
+    if (itemToAdd) {
+      handleAddProduct(itemToAdd);
+      toast({ title: 'Added', description: `${itemToAdd.name} added to order` });
+      setSearchQuery("");
+      return;
+    }
+
+    // If no item found, notify
+    toast({ title: 'Not found', description: `No product found for SKU "${q}"` });
+  };
+
+  const [showScanner, setShowScanner] = useState(false);
 
   // Handle measurement requirement response (after order creation)
   const handleMeasurementRequired = (required: boolean) => {
@@ -744,6 +776,12 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
         </DialogContent>
       </Dialog>
 
+      <ScannerDialog
+        open={showScanner}
+        onOpenChange={setShowScanner}
+        onDetected={(code) => tryAddByQuery(code)}
+      />
+
       {/* Product Search Dialog */}
       <Dialog open={showProductSearch} onOpenChange={setShowProductSearch}>
         <DialogContent className="sm:max-w-md">
@@ -762,25 +800,19 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key !== 'Enter') return;
-                  const q = (searchQuery || '').trim();
-                  if (!q) return;
-                  // Try exact SKU match
-                  const found = inventory.find((it) => (it.sku || '').toLowerCase() === q.toLowerCase());
-                  if (found) {
-                    handleAddProduct(found);
-                    return;
-                  }
-                  // If only one filtered result, add it
-                  if (filteredInventory.length === 1) {
-                    handleAddProduct(filteredInventory[0]);
-                    return;
-                  }
-                  toast({ title: 'Not found', description: `No product found for SKU "${q}"` });
+                  tryAddByQuery(searchQuery);
                 }}
                 className="pl-9 pr-10"
                 autoFocus
               />
-              <Barcode className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <button
+                type="button"
+                onClick={() => setShowScanner(true)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center text-muted-foreground"
+                aria-label="Open scanner"
+              >
+                <Barcode className="h-4 w-4" />
+              </button>
             </div>
 
             <div className="max-h-64 overflow-y-auto space-y-2">

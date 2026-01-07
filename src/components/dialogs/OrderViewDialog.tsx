@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { format } from "date-fns";
 import { Crown, Phone, Calendar, Store, User, Trash2, CreditCard, RotateCcw, Plus, ArrowDownCircle, ArrowUpCircle, ChevronDown, ChevronUp, Package, Receipt, Barcode } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -55,9 +55,6 @@ export function OrderViewDialog({ order, open, onOpenChange }: OrderViewDialogPr
   const [paymentAmount, setPaymentAmount] = useState<string>("");
   const [refundAmount, setRefundAmount] = useState<string>("");
   const [scanQuery, setScanQuery] = useState("");
-  const [scannerOpen, setScannerOpen] = useState(false);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const readerRef = useRef<any>(null);
   const { updateOrder, deleteOrder } = useOrders();
   const { payments, recordPayment, netReceived } = usePaymentHistory(order?.id);
   const { items: orderItems, addOrderItem } = useOrderItems(order?.id as string | undefined);
@@ -141,100 +138,6 @@ export function OrderViewDialog({ order, open, onOpenChange }: OrderViewDialogPr
     });
   };
 
-  const stopScanner = async () => {
-    try {
-      if (readerRef.current && typeof readerRef.current.reset === 'function') {
-        await readerRef.current.reset();
-      }
-    } catch (e) {
-      // ignore
-    }
-    readerRef.current = null;
-    setScannerOpen(false);
-  };
-
-  useEffect(() => {
-    return () => {
-      // cleanup on unmount
-      if (readerRef.current && typeof readerRef.current.reset === 'function') {
-        try { readerRef.current.reset(); } catch (e) {}
-      }
-      readerRef.current = null;
-    };
-  }, []);
-
-  const addItemBySKU = async (q: string) => {
-    const sku = (q || '').trim();
-    if (!sku) return;
-    if (!order || !order.id) {
-      toast({ title: 'Order not available', description: 'Cannot add item to unknown order', variant: 'destructive' });
-      return;
-    }
-
-    const found = inventory.find((it: any) => (it.sku || '').toLowerCase() === sku.toLowerCase());
-    let itemToAdd = found;
-    if (!itemToAdd) {
-      const matches = inventory.filter((it: any) => {
-        const s = (it.sku || '').toLowerCase();
-        const name = (it.name || '').toLowerCase();
-        return s.includes(sku.toLowerCase()) || name.includes(sku.toLowerCase());
-      });
-      if (matches.length === 1) itemToAdd = matches[0];
-    }
-
-    if (!itemToAdd) {
-      toast({ title: 'Not found', description: `No product found for SKU "${sku}"` });
-      return;
-    }
-
-    try {
-      await addOrderItem.mutateAsync({
-        order_id: order.id,
-        description: itemToAdd.name,
-        unit_price: Number(itemToAdd.price) || 0,
-        quantity: 1,
-        total_price: Number(itemToAdd.price) || 0,
-        inventory_id: itemToAdd.id,
-        measurement_id: null,
-        is_custom_work: false,
-      });
-      setScanQuery("");
-      toast({ title: 'Added', description: `${itemToAdd.name} added to order` });
-      // stop scanner if open
-      if (scannerOpen) await stopScanner();
-    } catch (err: any) {
-      toast({ title: 'Error', description: err?.message || 'Failed to add item', variant: 'destructive' });
-    }
-  };
-
-  const startScanner = async () => {
-    try {
-      setScannerOpen(true);
-      const zxing = await import('@zxing/browser');
-      const { BrowserMultiFormatReader } = zxing;
-      const codeReader = new BrowserMultiFormatReader();
-      readerRef.current = codeReader;
-      const devices = await BrowserMultiFormatReader.listVideoInputDevices();
-      const deviceId = devices && devices.length ? devices[0].deviceId : undefined;
-      const previewElem = videoRef.current || (document.getElementById('barcode-preview') as HTMLVideoElement | null);
-      if (!deviceId || !previewElem) {
-        toast({ title: 'No camera', description: 'No camera found or preview unavailable', variant: 'destructive' });
-        setScannerOpen(false);
-        return;
-      }
-
-      codeReader.decodeFromVideoDevice(deviceId, previewElem, (result: any, err: any) => {
-        if (result) {
-          const text = typeof result.getText === 'function' ? result.getText() : (result.text || result.codeResult?.code);
-          if (text) addItemBySKU(text);
-        }
-      });
-    } catch (err) {
-      toast({ title: 'Scanner error', description: 'Camera scanner unavailable. Install @zxing/browser or allow camera access.', variant: 'destructive' });
-      setScannerOpen(false);
-    }
-  };
-
   if (!order) return null;
 
   const remainingBalance = Number(order.total_amount) - netReceived;
@@ -291,40 +194,7 @@ export function OrderViewDialog({ order, open, onOpenChange }: OrderViewDialogPr
                     </Button>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="space-y-2 pt-2">
-                    {/* SKU / Barcode scan input - scanners act as keyboard and usually send Enter */}
-                    <div className="mb-2">
-                      <label className="text-xs text-muted-foreground">Scan SKU or enter SKU</label>
-                      <div className="relative mt-1">
-                        <button
-                          type="button"
-                          aria-label="Open scanner"
-                          onClick={() => startScanner()}
-                          className="absolute left-1 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center text-muted-foreground"
-                        >
-                          <Barcode className="h-4 w-4" />
-                        </button>
-                        <Input
-                          placeholder="Scan SKU or enter SKU and press Enter"
-                          value={scanQuery}
-                          onChange={(e) => setScanQuery(e.target.value)}
-                          className="pl-9"
-                          onKeyDown={async (e) => {
-                            if (e.key !== 'Enter') return;
-                            const q = (scanQuery || '').trim();
-                            if (!q) return;
-                            await addItemBySKU(q);
-                          }}
-                        />
-                      </div>
-                      {scannerOpen && (
-                        <div className="mt-2">
-                          <video id="barcode-preview" ref={videoRef} className="w-full h-48 rounded-md border object-cover" />
-                          <div className="flex justify-end mt-2">
-                            <Button size="sm" variant="outline" onClick={() => stopScanner()}>Close Scanner</Button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    {/* scan input removed — New Order handles scanning via camera or keyboard scanner */}
                     {orderItems.length > 0 ? (
                       orderItems.map((item: any) => (
                         <div key={item.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/30 border border-border">
