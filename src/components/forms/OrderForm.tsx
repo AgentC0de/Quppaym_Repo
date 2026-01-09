@@ -196,8 +196,7 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
       isCustomWork: false,
       measurementId: null,
     };
-    
-    setOrderItems([...orderItems, newItem]);
+    setOrderItems((prev) => [...prev, newItem]);
     setShowProductSearch(false);
     setSearchQuery("");
   };
@@ -214,8 +213,7 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
       isCustomWork: true,
       measurementId: null,
     };
-    
-    setOrderItems([...orderItems, newItem]);
+    setOrderItems((prev) => [...prev, newItem]);
     setShowProductSearch(false);
     setSearchQuery("");
   };
@@ -233,7 +231,7 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
       isCustomWork: false,
       measurementId: null,
     };
-    setOrderItems([...orderItems, newItem]);
+    setOrderItems((prev) => [...prev, newItem]);
     setShowProductSearch(false);
     setSearchQuery("");
   };
@@ -378,8 +376,8 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
               order_id: createdOrder.id,
               description: item.name,
               unit_price: item.price,
-              quantity: item.quantity,
-              total_price: item.price * item.quantity,
+              quantity: Number(item.quantity || 0),
+              total_price: item.price * Number(item.quantity || 0),
               inventory_id: item.inventoryId,
               service_id: (item as any).serviceId || null,
               measurement_id: item.measurementId,
@@ -753,15 +751,15 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
                         <label className="text-xs text-muted-foreground">Qty</label>
                         <Input
                           type="number"
-                          min={1}
+                          min={0}
                           value={item.quantity}
-                          onChange={(e) => handleUpdateQuantity(item.id, Number(e.target.value))}
+                          onChange={(e) => handleUpdateQuantity(item.id, e.target.value)}
                           className="mt-1"
                         />
                       </div>
                       <div>
                         <label className="text-xs text-muted-foreground">Total</label>
-                        <p className="mt-1 py-2 font-medium">₹{(item.price * item.quantity).toLocaleString()}</p>
+                        <p className="mt-1 py-2 font-medium">₹{(item.price * Number(item.quantity || 0)).toLocaleString()}</p>
                       </div>
                     </div>
                   </div>
