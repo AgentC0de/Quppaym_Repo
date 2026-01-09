@@ -72,7 +72,7 @@ interface OrderItem {
   name: string;
   sku: string;
   price: number;
-  quantity: number;
+  quantity: number | string;
   isCustomWork: boolean;
   measurementId: string | null;
 }
@@ -147,7 +147,7 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
   );
 
   const totalAmount = orderItems.reduce(
-    (sum, item) => sum + item.price * item.quantity,
+    (sum, item) => sum + item.price * Number(item.quantity || 0),
     0
   );
 
@@ -325,12 +325,21 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
     setOrderItems(orderItems.filter((item) => item.id !== itemId));
   };
 
-  // Update item quantity
-  const handleUpdateQuantity = (itemId: string, quantity: number) => {
-    setOrderItems(
-      orderItems.map((item) =>
-        item.id === itemId ? { ...item, quantity: Math.max(1, quantity) } : item
-      )
+  // Update item quantity. Allow temporary empty input while typing and
+  // remove the item when quantity is set to 0.
+  const handleUpdateQuantity = (itemId: string, raw: string | number) => {
+    const valueStr = typeof raw === "number" ? String(raw) : raw;
+    setOrderItems((prev) =>
+      prev.flatMap((item) => {
+        if (item.id !== itemId) return [item];
+        // allow empty string while user is editing
+        if (valueStr === "") return [{ ...item, quantity: "" }];
+        const n = Number(valueStr);
+        if (Number.isNaN(n)) return [item];
+        // treat zero or negative as remove
+        if (n <= 0) return [];
+        return [{ ...item, quantity: n }];
+      })
     );
   };
 

@@ -14,6 +14,8 @@ export function ScannerDialog({ open, onOpenChange, onDetected }: ScannerDialogP
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
   const [scanning, setScanning] = useState(false);
+  const processingRef = useRef(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -39,22 +41,28 @@ export function ScannerDialog({ open, onOpenChange, onDetected }: ScannerDialogP
         let started = false;
         try {
           // decodeFromConstraints may not be available on all versions; try it and fall back if it fails
-          // @ts-ignore - method exists in @zxing/browser
-          if (typeof codeReader.decodeFromConstraints === "function") {
-            // @ts-ignore
-            await codeReader.decodeFromConstraints(constraints, videoRef.current as HTMLVideoElement, async (result, err) => {
-              if (result) {
+            // @ts-ignore - method exists in @zxing/browser
+            if (typeof codeReader.decodeFromConstraints === "function") {
+              // @ts-ignore
+              await codeReader.decodeFromConstraints(constraints, videoRef.current as HTMLVideoElement, async (result, err) => {
+                if (!result) return;
+                if (processingRef.current) return;
+                processingRef.current = true;
                 try {
-                  const added = await Promise.resolve(onDetected(result.getText()));
+                  const raw = (result.getText() || "").trim();
+                  const added = await Promise.resolve(onDetected(raw));
                   if (added) {
                     try { codeReader.reset(); } catch (e) {}
                     onOpenChange(false);
                   }
-                } catch (e) {}
-              }
-            });
-            started = true;
-          }
+                } catch (e) {
+                  // swallow but allow retry
+                } finally {
+                  processingRef.current = false;
+                }
+              });
+              started = true;
+            }
         } catch (e) {
           started = false;
         }
@@ -69,21 +77,30 @@ export function ScannerDialog({ open, onOpenChange, onDetected }: ScannerDialogP
           }
 
           await codeReader.decodeFromVideoDevice(deviceId, videoRef.current as HTMLVideoElement, async (result, err) => {
-            if (result) {
-              try {
-                const added = await Promise.resolve(onDetected(result.getText()));
-                if (added) {
-                  try { codeReader.reset(); } catch (e) {}
-                  onOpenChange(false);
-                }
-              } catch (e) {}
+            if (!result) return;
+            if (processingRef.current) return;
+            processingRef.current = true;
+            try {
+              const raw = (result.getText() || "").trim();
+              const added = await Promise.resolve(onDetected(raw));
+              if (added) {
+                try { codeReader.reset(); } catch (e) {}
+                onOpenChange(false);
+              }
+            } catch (e) {
+              // swallow but allow retry
+            } finally {
+              processingRef.current = false;
             }
           });
         }
       } catch (err) {
-        // If something goes wrong, stop scanning and close
+        // If something goes wrong (permission denied, device error), stop scanning and close
         try {
           codeReader.reset();
+        } catch (e) {}
+        try {
+          setStatusMessage("Camera access error");
         } catch (e) {}
         onOpenChange(false);
       }
@@ -108,6 +125,11 @@ export function ScannerDialog({ open, onOpenChange, onDetected }: ScannerDialogP
           <div className="w-full h-64 bg-black/5 rounded overflow-hidden flex items-center justify-center">
             <video ref={videoRef} className="w-full h-full object-cover" />
           </div>
+            {statusMessage ? (
+              <div className="text-sm text-center text-destructive">{statusMessage}</div>
+            ) : (
+              <div className="text-xs text-muted-foreground text-center">Point camera at barcode</div>
+            )}
           <div className="flex justify-end">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Close
