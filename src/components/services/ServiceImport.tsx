@@ -9,11 +9,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Upload, FileSpreadsheet, Download, Loader2, CheckCircle, AlertCircle } from "lucide-react";
-import { useInventory } from "@/hooks/useInventory";
+import { useServices } from "@/hooks/useServices";
 import { useToast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
 
-type InventoryInsert = Database["public"]["Tables"]["inventory"]["Insert"];
+type ServiceInsert = Database["public"]["Tables"]["services"]["Insert"];
 
 interface ImportResult {
   success: number;
@@ -21,24 +21,22 @@ interface ImportResult {
   errors: string[];
 }
 
-export function InventoryImport() {
+export function ServiceImport() {
   const [open, setOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { createInventoryItem } = useInventory();
+  const { createService } = useServices();
   const { toast } = useToast();
 
   const downloadTemplate = () => {
-    const headers = ["name", "sku", "category", "quantity", "price", "cost", "min_stock_level", "description"];
-    const sampleRow = ["Silk Kurta", "SKU-001", "Fabrics", "50", "2500", "1500", "10", "Premium silk kurta fabric"];
-    
+    const headers = ["name", "description", "price", "unit", "duration_minutes", "category", "taxable"];
+    const sampleRow = ["Hand Embroidery", "Intricate hand embroidery", "1500", "per_piece", "60", "Embellishment", "true"];
     const csvContent = [headers.join(","), sampleRow.join(",")].join("\n");
-    
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = "inventory_template.csv";
+    link.download = "services_template.csv";
     link.click();
   };
 
@@ -48,7 +46,6 @@ export function InventoryImport() {
       const result: string[] = [];
       let current = "";
       let inQuotes = false;
-      
       for (let i = 0; i < line.length; i++) {
         const char = line[i];
         if (char === '"') {
@@ -73,20 +70,12 @@ export function InventoryImport() {
     const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
 
     if (!isCSV && !isExcel) {
-      toast({
-        title: "Invalid file type",
-        description: "Please upload a CSV or Excel file.",
-        variant: "destructive",
-      });
+      toast({ title: "Invalid file type", description: "Please upload a CSV or Excel file.", variant: "destructive" });
       return;
     }
 
     if (isExcel) {
-      toast({
-        title: "Excel files",
-        description: "Please save your Excel file as CSV before uploading.",
-        variant: "destructive",
-      });
+      toast({ title: "Excel files", description: "Please save your Excel file as CSV before uploading.", variant: "destructive" });
       return;
     }
 
@@ -96,27 +85,21 @@ export function InventoryImport() {
     try {
       const text = await file.text();
       const rows = parseCSV(text);
-      
-      if (rows.length < 2) {
-        throw new Error("File must contain at least a header row and one data row.");
-      }
+
+      if (rows.length < 2) throw new Error("File must contain at least a header row and one data row.");
 
       const headers = rows[0].map(h => h.toLowerCase().trim());
       const dataRows = rows.slice(1);
 
-      const requiredFields = ["name", "sku", "category", "price"];
+      const requiredFields = ["name", "price"];
       const missingFields = requiredFields.filter(f => !headers.includes(f));
-      
-      if (missingFields.length > 0) {
-        throw new Error(`Missing required columns: ${missingFields.join(", ")}`);
-      }
+      if (missingFields.length > 0) throw new Error(`Missing required columns: ${missingFields.join(", ")}`);
 
       const importResult: ImportResult = { success: 0, failed: 0, errors: [] };
 
       for (let i = 0; i < dataRows.length; i++) {
         const row = dataRows[i];
-        const rowNum = i + 2; // Account for header row and 0-index
-
+        const rowNum = i + 2;
         try {
           const getValue = (field: string): string => {
             const index = headers.indexOf(field);
@@ -124,42 +107,33 @@ export function InventoryImport() {
           };
 
           const name = getValue("name");
-          const sku = getValue("sku");
-          const category = getValue("category");
+          const description = getValue("description") || undefined;
           const priceStr = getValue("price");
+          const unit = getValue("unit") || "per_piece";
+          const durationStr = getValue("duration_minutes");
+          const duration_minutes = durationStr ? parseInt(durationStr, 10) : undefined;
+          const category = getValue("category") || undefined;
+          const taxableStr = getValue("taxable");
+          const taxable = taxableStr ? taxableStr.toLowerCase() === "true" : false;
 
-          if (!name || !sku || !category || !priceStr) {
-            throw new Error(`Row ${rowNum}: Missing required fields (name, sku, category, price)`);
-          }
+          if (!name || !priceStr) throw new Error(`Row ${rowNum}: Missing required fields (name, price)`);
 
           const price = parseFloat(priceStr.replace(/[₹,]/g, ""));
-          if (isNaN(price) || price < 0) {
-            throw new Error(`Row ${rowNum}: Invalid price value`);
-          }
+          if (isNaN(price) || price < 0) throw new Error(`Row ${rowNum}: Invalid price value`);
 
-          const quantityStr = getValue("quantity");
-          const quantity = quantityStr ? parseInt(quantityStr, 10) : 0;
-
-          const costStr = getValue("cost");
-          const cost = costStr ? parseFloat(costStr.replace(/[₹,]/g, "")) : undefined;
-
-          const minStockStr = getValue("min_stock_level");
-          const minStockLevel = minStockStr ? parseInt(minStockStr, 10) : 5;
-
-          const description = getValue("description") || undefined;
-
-          const item: InventoryInsert = {
+          const svc: ServiceInsert = {
             name,
-            sku,
-            category,
-            price,
-            quantity: isNaN(quantity) ? 0 : quantity,
-            cost: cost && !isNaN(cost) ? cost : undefined,
-            min_stock_level: isNaN(minStockLevel) ? 5 : minStockLevel,
             description,
-          };
+            price,
+            unit,
+            duration_minutes: duration_minutes ?? null,
+            // category_id may not be available by name; leave null and rely on manual mapping later
+            category_id: null,
+            taxable,
+            active: true,
+          } as any;
 
-          await createInventoryItem.mutateAsync(item);
+          await createService.mutateAsync(svc);
           importResult.success++;
         } catch (err) {
           importResult.failed++;
@@ -168,24 +142,14 @@ export function InventoryImport() {
       }
 
       setResult(importResult);
-
       if (importResult.success > 0) {
-        toast({
-          title: "Import completed",
-          description: `Successfully imported ${importResult.success} items.`,
-        });
+        toast({ title: "Import completed", description: `Successfully imported ${importResult.success} services.` });
       }
     } catch (err) {
-      toast({
-        title: "Import failed",
-        description: err instanceof Error ? err.message : "Failed to parse file.",
-        variant: "destructive",
-      });
+      toast({ title: "Import failed", description: err instanceof Error ? err.message : "Failed to parse file.", variant: "destructive" });
     } finally {
       setIsImporting(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -206,48 +170,33 @@ export function InventoryImport() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5" />
-            Import Inventory
+            Import Services
           </DialogTitle>
           <DialogDescription>
-            Import products from a CSV file. Download the template to see the required format.
+            Import services from a CSV file. Download the template to see the expected format.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Instructions */}
           <div className="rounded-lg border border-border bg-muted/30 p-4">
             <h4 className="mb-2 font-medium text-foreground">Instructions</h4>
             <ol className="space-y-2 text-sm text-muted-foreground">
               <li>1. Download the CSV template below</li>
-              <li>2. Fill in your product data (you can use Excel, then save as CSV)</li>
-              <li>3. <strong>Required columns:</strong> name, sku, category, price</li>
-              <li>4. <strong>Optional columns:</strong> quantity, cost, min_stock_level, description</li>
+              <li>2. Fill in your service data</li>
+              <li>3. <strong>Required columns:</strong> name, price</li>
+              <li>4. <strong>Optional columns:</strong> description, unit, duration_minutes, category, taxable</li>
               <li>5. Upload your completed CSV file</li>
             </ol>
           </div>
 
-          {/* Download Template */}
           <Button variant="outline" onClick={downloadTemplate} className="w-full gap-2">
             <Download className="h-4 w-4" />
             Download CSV Template
           </Button>
 
-          {/* File Upload */}
           <div className="space-y-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,.xlsx,.xls"
-              onChange={handleFileUpload}
-              className="hidden"
-              id="inventory-file-upload"
-            />
-            <Button
-              variant="default"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isImporting}
-              className="w-full gap-2"
-            >
+            <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} className="hidden" id="service-file-upload" />
+            <Button variant="default" onClick={() => fileInputRef.current?.click()} disabled={isImporting} className="w-full gap-2">
               {isImporting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -262,7 +211,6 @@ export function InventoryImport() {
             </Button>
           </div>
 
-          {/* Results */}
           {result && (
             <div className="space-y-3 rounded-lg border border-border p-4">
               <div className="flex items-center gap-4">
@@ -286,9 +234,7 @@ export function InventoryImport() {
                     <p key={i} className="text-xs text-destructive/80">{error}</p>
                   ))}
                   {result.errors.length > 5 && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      ...and {result.errors.length - 5} more errors
-                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">...and {result.errors.length - 5} more errors</p>
                   )}
                 </div>
               )}

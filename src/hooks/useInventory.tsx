@@ -83,19 +83,25 @@ export function useInventory() {
   });
 
   const deleteInventoryItem = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("inventory")
-        .update({ is_active: false })
-        .eq("id", id);
-      
+    // Accept either an `id` string or an object `{ id, cascade?: boolean }`.
+    mutationFn: async (idOrPayload: string | { id: string; cascade?: boolean }) => {
+      const id = typeof idOrPayload === "string" ? idOrPayload : idOrPayload.id;
+      const cascade = typeof idOrPayload === "string" ? true : idOrPayload.cascade ?? true;
+
+      // If cascade is true, remove dependent `order_items` first to avoid FK constraint errors.
+      if (cascade) {
+        const { error: delItemsError } = await supabase.from("order_items").delete().eq("inventory_id", id);
+        if (delItemsError) throw delItemsError;
+      }
+
+      const { error } = await supabase.from("inventory").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
       toast({
-        title: "Item removed",
-        description: "The inventory item has been deactivated.",
+        title: "Item deleted",
+        description: "The inventory item has been removed from the database.",
       });
     },
     onError: (error: Error) => {

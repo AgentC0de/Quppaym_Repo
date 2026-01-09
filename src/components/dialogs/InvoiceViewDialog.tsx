@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { useOrderItems } from "@/hooks/useOrderItems";
 import { usePaymentHistory } from "@/hooks/usePaymentHistory";
 import { useToast } from "@/hooks/use-toast";
+import { useSettings } from "@/hooks/useSettings";
 import type { Database } from "@/integrations/supabase/types";
 
 type Order = Database["public"]["Tables"]["orders"]["Row"] & {
@@ -31,6 +32,7 @@ export function InvoiceViewDialog({ order, open, onOpenChange }: InvoiceViewDial
   const { items: orderItems } = useOrderItems(order?.id);
   const { netReceived } = usePaymentHistory(order?.id);
   const { toast } = useToast();
+  const { settings: templateSettings } = useSettings("invoice_template");
 
   if (!order) return null;
 
@@ -51,6 +53,13 @@ export function InvoiceViewDialog({ order, open, onOpenChange }: InvoiceViewDial
         <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right;">₹${Number(item.total_price).toLocaleString()}</td>
       </tr>
     `).join("");
+
+    const companyName = templateSettings?.companyName || "Quppayam Boutique";
+    const companyAddress = templateSettings?.companyAddress || (order.store?.address || "Chennai, India");
+    const companyPhone = templateSettings?.companyPhone || (order.store?.phone || "");
+    const footerNote = templateSettings?.footerNote || "Thank you for your business!";
+    const showLogo = templateSettings?.showLogo ?? true;
+    const logoUrl = templateSettings?.logoUrl || "";
 
     const html = `
       <!DOCTYPE html>
@@ -92,9 +101,9 @@ export function InvoiceViewDialog({ order, open, onOpenChange }: InvoiceViewDial
         <body>
           <div class="header">
             <div class="company">
-              <h1>Quppayam Boutique</h1>
-              <p>${order.store?.address || "Chennai, India"}</p>
-              <p>${order.store?.phone || ""}</p>
+              ${showLogo && logoUrl ? `<div style="display:flex;align-items:center;gap:12px;"><img src="${logoUrl}" style="height:48px;object-fit:contain;"/><h1 style="margin:0;font-size:20px;color:#7c3aed;">${companyName}</h1></div>` : `<h1>${companyName}</h1>`}
+              <p>${companyAddress}</p>
+              <p>${companyPhone}</p>
             </div>
             <div class="invoice-info">
               <h2>INVOICE</h2>
@@ -170,7 +179,7 @@ export function InvoiceViewDialog({ order, open, onOpenChange }: InvoiceViewDial
           </div>
 
           <div class="footer">
-            <p>Thank you for your business!</p>
+            <p>${footerNote}</p>
           </div>
 
           <div class="no-print" style="margin-top: 24px; text-align: center;">

@@ -16,7 +16,7 @@ export function useStores() {
       const { data, error } = await supabase
         .from("stores")
         .select("*")
-        .eq("is_active", true)
+        .order("is_active", { ascending: false })
         .order("name");
       
       if (error) throw error;
@@ -104,6 +104,54 @@ export function useStores() {
     },
   });
 
+  const reactivateStore = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("stores")
+        .update({ is_active: true })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["stores"] });
+      toast({
+        title: "Store reactivated",
+        description: "The store has been reactivated.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const permanentDeleteStore = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("stores")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["stores"] });
+      toast({
+        title: "Store deleted",
+        description: "The store has been permanently deleted.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   return {
     stores,
     isLoading,
@@ -111,5 +159,7 @@ export function useStores() {
     createStore,
     updateStore,
     deleteStore,
+    reactivateStore,
+    permanentDeleteStore,
   };
 }

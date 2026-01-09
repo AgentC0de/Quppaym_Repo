@@ -25,7 +25,7 @@ interface CustomerListProps {
 export function CustomerList({ customers }: CustomerListProps) {
   return (
     <div className="card-luxury overflow-hidden">
-      <div className="border-b border-border px-6 py-4">
+      <div className="border-b border-border px-2 py-2 md:px-4 lg:px-5 xl:px-6 lg:py-4">
         <h3 className="font-display text-lg font-semibold text-foreground">
           VIP Customers
         </h3>
@@ -34,10 +34,10 @@ export function CustomerList({ customers }: CustomerListProps) {
         {customers.map((customer) => (
           <div
             key={customer.id}
-            className="flex items-center justify-between px-6 py-4 transition-colors hover:bg-muted/20"
+            className="flex items-center justify-between px-2 py-2 md:px-4 lg:px-5 xl:px-6 transition-colors hover:bg-muted/20"
           >
             <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 font-display text-lg font-semibold text-primary">
+              <div className="flex h-10 w-10 md:h-12 md:w-12 items-center justify-center rounded-full bg-primary/10 font-display text-lg font-semibold text-primary">
                 {customer.name.charAt(0)}
               </div>
               <div>
@@ -49,13 +49,13 @@ export function CustomerList({ customers }: CustomerListProps) {
                     <Crown className="h-4 w-4 text-gold" />
                   )}
                 </div>
-                <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
                   <Phone className="h-3.5 w-3.5" />
                   <span>{customer.phone}</span>
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-4">
               <div className="text-right">
                 <p className="font-medium text-foreground">
                   ₹{customer.totalSpent.toLocaleString()}

@@ -18,7 +18,7 @@ interface TaskListProps {
 export function TaskList({ tasks }: TaskListProps) {
   return (
     <div className="card-luxury overflow-hidden">
-      <div className="border-b border-border px-6 py-4">
+      <div className="border-b border-border px-4 py-3 sm:px-6 sm:py-4">
         <h3 className="font-display text-lg font-semibold text-foreground">
           Today's Tasks
         </h3>
@@ -28,25 +28,25 @@ export function TaskList({ tasks }: TaskListProps) {
           <div
             key={task.id}
             className={cn(
-              "flex items-center gap-4 px-6 py-4 transition-colors hover:bg-muted/20",
+              "flex items-center gap-3 px-2 py-2 md:px-4 lg:px-5 xl:px-6 transition-colors hover:bg-muted/20",
               task.completed && "opacity-60"
             )}
           >
             <button
               className={cn(
-                "flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+                "flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors",
                 task.completed
                   ? "border-emerald-500 bg-emerald-500"
                   : "border-border hover:border-primary"
               )}
             >
               {task.completed ? (
-                <Check className="h-3.5 w-3.5 text-white" />
+                <Check className="h-3 w-3 text-white" />
               ) : (
-                <Circle className="h-3.5 w-3.5 text-transparent" />
+                <Circle className="h-3 w-3 text-transparent" />
               )}
             </button>
-            <div className="flex-1">
+                <div className="flex-1">
               <p
                 className={cn(
                   "font-medium",
@@ -57,7 +57,7 @@ export function TaskList({ tasks }: TaskListProps) {
               >
                 {task.title}
               </p>
-              <p className="mt-0.5 text-sm text-muted-foreground">
+              <p className="mt-0.5 text-xs text-muted-foreground">
                 Order #{task.orderNumber} • {task.assignee}
               </p>
             </div>

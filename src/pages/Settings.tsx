@@ -17,11 +17,12 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Building2, Bell, Shield, MessageSquare, CreditCard, ListOrdered, Crown, FileText, Ruler } from "lucide-react";
+import { Building2, Bell, Shield, MessageSquare, CreditCard, ListOrdered, Crown, FileText, Ruler, List } from "lucide-react";
 import { OrderStatusSettings } from "@/components/settings/OrderStatusSettings";
 import { VipStatusSettings } from "@/components/settings/VipStatusSettings";
 import { InvoiceTemplateSettings } from "@/components/settings/InvoiceTemplateSettings";
 import { MeasurementTemplateSettings } from "@/components/settings/MeasurementTemplateSettings";
+import CategorySettings from "@/components/settings/CategorySettings";
 
 const Settings = () => {
   return (
@@ -141,6 +142,28 @@ const Settings = () => {
             </AccordionTrigger>
             <AccordionContent className="px-6 pb-6">
               <InvoiceTemplateSettings />
+            </AccordionContent>
+          </AccordionItem>
+
+          {/* Product Categories */}
+          <AccordionItem value="categories" className="card-luxury border-none">
+            <AccordionTrigger className="px-6 py-4 hover:no-underline">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                  <List className="h-5 w-5 text-primary" />
+                </div>
+                <div className="text-left">
+                  <h2 className="font-display text-lg font-semibold text-foreground">
+                    Product Categories
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Manage the canonical product categories used across inventory.
+                  </p>
+                </div>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent className="px-6 pb-6">
+              <CategorySettings />
             </AccordionContent>
           </AccordionItem>
 

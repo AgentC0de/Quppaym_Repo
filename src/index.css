@@ -185,3 +185,39 @@
     border-color: hsl(var(--gold));
   }
 }
+
+/* Tablet-specific adjustments (reduce paddings and font sizes for improved density) */
+@media (min-width: 768px) and (max-width: 1023px) {
+  :root {
+    /* slightly smaller base font for tablets */
+    font-size: 15px;
+  }
+
+  /* reduce card padding on tablet */
+  .card-luxury {
+    padding: 0.75rem; /* equivalent to Tailwind p-3 */
+  }
+
+  /* table and list density */
+  .card-luxury th, .card-luxury td, .card-luxury .px-6 {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+
+  /* stat card value sizing */
+  .card-luxury .text-3xl {
+    font-size: 1.5rem; /* smaller on tablet */
+  }
+
+  /* tighter status badges */
+  .status-badge {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    font-size: 0.7rem;
+  }
+
+  /* reduce button paddings slightly */
+  .btn, button, .inline-flex.px-4.py-2 {
+    padding: 0.45rem 0.75rem;
+  }
+}

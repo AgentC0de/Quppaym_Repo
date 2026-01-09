@@ -47,7 +47,10 @@ const inventorySchema = z.object({
 
 type InventoryFormData = z.infer<typeof inventorySchema>;
 
-const categories = ["Fabric", "Notions", "Finished Goods", "Accessories", "Tools"];
+import { useCategories } from "@/hooks/useCategories";
+
+// fallback categories are empty — canonical list comes from DB via useCategories
+// kept local list removed in favor of dynamic categories
 
 interface InventoryItemFormProps {
   trigger?: React.ReactNode;
@@ -101,7 +104,7 @@ export function InventoryItemForm({ trigger, onSuccess }: InventoryItemFormProps
         {trigger || (
           <Button className="gap-2">
             <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Add Item</span>
+            <span className="inline">Add Item</span>
           </Button>
         )}
       </DialogTrigger>
@@ -157,9 +160,9 @@ export function InventoryItemForm({ trigger, onSuccess }: InventoryItemFormProps
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {categories.map((category) => (
-                          <SelectItem key={category} value={category}>
-                            {category}
+                        {(useCategories().categories || []).map((category) => (
+                          <SelectItem key={category.id} value={category.name}>
+                            {category.name}
                           </SelectItem>
                         ))}
                       </SelectContent>

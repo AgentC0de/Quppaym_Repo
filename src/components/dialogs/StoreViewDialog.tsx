@@ -55,8 +55,9 @@ interface StoreViewDialogProps {
 
 export function StoreViewDialog({ store, open, onOpenChange }: StoreViewDialogProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [showDeactivateAlert, setShowDeactivateAlert] = useState(false);
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
-  const { updateStore, deleteStore } = useStores();
+  const { updateStore, deleteStore, reactivateStore, permanentDeleteStore } = useStores();
 
   const form = useForm<StoreFormData>({
     resolver: zodResolver(storeSchema),
@@ -96,9 +97,28 @@ export function StoreViewDialog({ store, open, onOpenChange }: StoreViewDialogPr
     );
   };
 
-  const handleDelete = () => {
+  const handleDeactivate = () => {
     if (!store) return;
     deleteStore.mutate(store.id, {
+      onSuccess: () => {
+        setShowDeactivateAlert(false);
+        handleClose();
+      },
+    });
+  };
+
+  const handleReactivate = () => {
+    if (!store) return;
+    reactivateStore.mutate(store.id, {
+      onSuccess: () => {
+        handleClose();
+      },
+    });
+  };
+
+  const handlePermanentDelete = () => {
+    if (!store) return;
+    permanentDeleteStore.mutate(store.id, {
       onSuccess: () => {
         setShowDeleteAlert(false);
         handleClose();
@@ -246,15 +266,38 @@ export function StoreViewDialog({ store, open, onOpenChange }: StoreViewDialogPr
               </div>
 
               <DialogFooter className="flex-row gap-2 sm:justify-between">
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setShowDeleteAlert(true)}
-                  className="gap-2"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Deactivate
-                </Button>
+                <div className="flex gap-2">
+                  {store.is_active ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowDeactivateAlert(true)}
+                      className="gap-2"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Deactivate
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleReactivate}
+                      disabled={reactivateStore.isPending}
+                      className="gap-2 text-emerald-600 hover:text-emerald-700"
+                    >
+                      {reactivateStore.isPending ? "Reactivating..." : "Reactivate"}
+                    </Button>
+                  )}
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setShowDeleteAlert(true)}
+                    className="gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </Button>
+                </div>
                 <Button onClick={() => setIsEditing(true)} className="gap-2">
                   <Pencil className="h-4 w-4" />
                   Edit
@@ -265,7 +308,7 @@ export function StoreViewDialog({ store, open, onOpenChange }: StoreViewDialogPr
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={showDeleteAlert} onOpenChange={setShowDeleteAlert}>
+      <AlertDialog open={showDeactivateAlert} onOpenChange={setShowDeactivateAlert}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Deactivate Store</AlertDialogTitle>
@@ -275,8 +318,25 @@ export function StoreViewDialog({ store, open, onOpenChange }: StoreViewDialogPr
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleDeactivate} className="bg-amber-600 text-white hover:bg-amber-700">
               {deleteStore.isPending ? "Deactivating..." : "Deactivate"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showDeleteAlert} onOpenChange={setShowDeleteAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Store Permanently</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to permanently delete {store.name}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handlePermanentDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {permanentDeleteStore.isPending ? "Deleting..." : "Delete Permanently"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

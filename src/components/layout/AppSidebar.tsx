@@ -8,6 +8,7 @@ import {
   Ruler,
   UserCog,
   Building2,
+  Scissors,
   BarChart3,
   Settings,
   ChevronLeft,
@@ -25,6 +26,7 @@ const navigation = [
   { name: "Orders", href: "/orders", icon: ShoppingBag },
   { name: "Measurements", href: "/measurements", icon: Ruler },
   { name: "Inventory", href: "/inventory", icon: Package },
+  { name: "Services", href: "/services", icon: Scissors },
   { name: "Employees", href: "/employees", icon: UserCog },
   { name: "Stores", href: "/stores", icon: Building2 },
   { name: "Reports", href: "/reports", icon: BarChart3 },
@@ -42,6 +44,21 @@ interface SidebarContentProps {
 
 function SidebarContent({ collapsed, onCollapse, onNavigate }: SidebarContentProps) {
   const location = useLocation();
+  const [viewMode, setViewMode] = useState<"Mobile" | "Tablet" | "Desktop">("Desktop");
+
+  // Update view mode based on window width
+  useEffect(() => {
+    const update = () => {
+      if (typeof window === "undefined") return;
+      const w = window.innerWidth;
+      if (w >= 1024) setViewMode("Desktop");
+      else if (w >= 640) setViewMode("Tablet");
+      else setViewMode("Mobile");
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
 
   return (
     <div className="flex h-full flex-col">
@@ -97,6 +114,19 @@ function SidebarContent({ collapsed, onCollapse, onNavigate }: SidebarContentPro
       </nav>
 
       {/* Secondary Navigation */}
+      <div className="px-3 py-2">
+        <div className="text-xs text-muted-foreground">Current view</div>
+        <div className="mt-2 flex items-center gap-2">
+          <span
+            className={cn(
+              "inline-block h-2 w-2 rounded-full",
+              viewMode === "Desktop" ? "bg-gold" : viewMode === "Tablet" ? "bg-amber-500" : "bg-emerald-500"
+            )}
+          />
+          <span className="text-sm text-sidebar-foreground">{viewMode}</span>
+        </div>
+      </div>
+
       <div className="border-t border-sidebar-border px-3 py-4">
         {secondaryNavigation.map((item) => {
           const isActive = location.pathname === item.href;

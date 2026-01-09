@@ -12,6 +12,7 @@ import Measurements from "./pages/Measurements";
 import Inventory from "./pages/Inventory";
 import Employees from "./pages/Employees";
 import Stores from "./pages/Stores";
+import Services from "./pages/Services";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
@@ -32,6 +33,7 @@ const App = () => (
           <Route path="/measurements" element={<ProtectedRoute><Measurements /></ProtectedRoute>} />
           <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
           <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
+          <Route path="/services" element={<ProtectedRoute><Services /></ProtectedRoute>} />
           <Route path="/stores" element={<ProtectedRoute><Stores /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />

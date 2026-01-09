@@ -92,7 +92,7 @@ export function CustomerForm({ trigger }: CustomerFormProps) {
         {trigger || (
           <Button className="gap-2">
             <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Add Customer</span>
+            <span className="inline">Add Customer</span>
           </Button>
         )}
       </DialogTrigger>

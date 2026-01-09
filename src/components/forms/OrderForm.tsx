@@ -58,6 +58,7 @@ import { useCustomers } from "@/hooks/useCustomers";
 import { useStores } from "@/hooks/useStores";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useInventory } from "@/hooks/useInventory";
+import { useServices } from "@/hooks/useServices";
 import { useMeasurements } from "@/hooks/useMeasurements";
 import { MeasurementForm } from "./MeasurementForm";
 import { supabase } from "@/integrations/supabase/client";
@@ -67,6 +68,7 @@ import { useToast } from "@/hooks/use-toast";
 interface OrderItem {
   id: string;
   inventoryId: string | null;
+  serviceId?: string | null;
   name: string;
   sku: string;
   price: number;
@@ -116,6 +118,7 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
   const { activeEmployees } = useEmployees();
   const { inventory } = useInventory();
   const { measurements } = useMeasurements();
+  const { services } = useServices();
 
   const form = useForm<OrderFormData>({
     resolver: zodResolver(orderSchema),
@@ -156,6 +159,12 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
       item.sku.toLowerCase().includes(query) ||
       item.category.toLowerCase().includes(query)
     );
+  });
+
+  // Filter services based on search query
+  const filteredServices = (services || []).filter((s: any) => {
+    const q = searchQuery.toLowerCase();
+    return (s.name || "").toLowerCase().includes(q) || (s.description || "").toLowerCase().includes(q);
   });
 
   // Reset form when dialog closes
@@ -211,6 +220,24 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
     setSearchQuery("");
   };
 
+  // Add service (search-only, no scanner)
+  const handleAddService = (service: any) => {
+    const newItem: OrderItem = {
+      id: crypto.randomUUID(),
+      inventoryId: null,
+      serviceId: service.id,
+      name: service.name,
+      sku: "",
+      price: Number(service.price || 0),
+      quantity: 1,
+      isCustomWork: false,
+      measurementId: null,
+    };
+    setOrderItems([...orderItems, newItem]);
+    setShowProductSearch(false);
+    setSearchQuery("");
+  };
+
   // Try add product by query (used by Enter key or scanner)
   const tryAddByQuery = (raw: string) => {
     const q = (raw || "").trim();
@@ -242,6 +269,7 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
   };
 
   const [showScanner, setShowScanner] = useState(false);
+  const [searchMode, setSearchMode] = useState<"products" | "services">("products");
 
   // Handle measurement requirement response (after order creation)
   const handleMeasurementRequired = (required: boolean) => {
@@ -344,6 +372,7 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
               quantity: item.quantity,
               total_price: item.price * item.quantity,
               inventory_id: item.inventoryId,
+              service_id: (item as any).serviceId || null,
               measurement_id: item.measurementId,
               is_custom_work: item.isCustomWork,
             }));
@@ -368,9 +397,22 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
                   .eq("id", createdOrder.customer_id)
                   .single();
 
-                const itemsList = orderItems
-                  .map((it) => `${it.name} x ${it.quantity}`)
-                  .join("; ") || "-";
+                // Separate products and services for WhatsApp message (single template parameter)
+                const productItems = orderItems.filter((it) => !it.serviceId);
+                const serviceItems = orderItems.filter((it) => !!it.serviceId);
+                const productsText = productItems.length
+                  ? productItems.map((it) => `${it.name} x ${it.quantity}`).join(", ")
+                  : "";
+                const servicesText = serviceItems.length
+                  ? serviceItems.map((it) => `${it.name} x ${it.quantity}`).join(", ")
+                  : "";
+                const itemsList = productsText && servicesText
+                  ? `Products: ${productsText}; Services: ${servicesText}`
+                  : productsText
+                  ? `Products: ${productsText}`
+                  : servicesText
+                  ? `Services: ${servicesText}`
+                  : "-";
 
                 const orderDate = createdOrder.created_at
                   ? format(new Date(createdOrder.created_at), "yyyy-MM-dd")
@@ -469,7 +511,7 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
           {trigger || (
             <Button className="gap-2">
               <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">New Order</span>
+              <span className="inline">New Order</span>
             </Button>
           )}
         </DialogTrigger>
@@ -783,80 +825,118 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
         onDetected={(code) => tryAddByQuery(code)}
       />
 
-      {/* Product Search Dialog */}
+      {/* Product / Service Search Dialog */}
       <Dialog open={showProductSearch} onOpenChange={setShowProductSearch}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Product</DialogTitle>
-            <DialogDescription>
-              Search by name or scan SKU code
-            </DialogDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle>{searchMode === "products" ? "Add Product" : "Add Service"}</DialogTitle>
+                <DialogDescription>
+                  {searchMode === "products" ? "Search by name or scan SKU code" : "Search services by name"}
+                </DialogDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant={searchMode === "products" ? "secondary" : "ghost"} size="sm" onClick={() => setSearchMode("products")}>Products</Button>
+                <Button variant={searchMode === "services" ? "secondary" : "ghost"} size="sm" onClick={() => setSearchMode("services")}>Services</Button>
+              </div>
+            </div>
           </DialogHeader>
           <div className="space-y-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search products or enter SKU..."
+                placeholder={searchMode === "products" ? "Search products or enter SKU..." : "Search services by name..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key !== 'Enter') return;
-                  tryAddByQuery(searchQuery);
+                  if (searchMode === "products") tryAddByQuery(searchQuery);
                 }}
                 className="pl-9 pr-10"
                 autoFocus
               />
-              <button
-                type="button"
-                onClick={() => setShowScanner(true)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center text-muted-foreground"
-                aria-label="Open scanner"
-              >
-                <Barcode className="h-4 w-4" />
-              </button>
+              {searchMode === "products" && (
+                <button
+                  type="button"
+                  onClick={() => setShowScanner(true)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center text-muted-foreground"
+                  aria-label="Open scanner"
+                >
+                  <Barcode className="h-4 w-4" />
+                </button>
+              )}
             </div>
 
             <div className="max-h-64 overflow-y-auto space-y-2">
-              {filteredInventory.length > 0 ? (
-                filteredInventory.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleAddProduct(item)}
-                    className="w-full text-left p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-medium">{item.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          SKU: {item.sku} • {item.category}
-                        </p>
+              {searchMode === "products" ? (
+                filteredInventory.length > 0 ? (
+                  filteredInventory.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleAddProduct(item)}
+                      className="w-full text-left p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-medium">{item.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            SKU: {item.sku} • {item.category}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium">₹{Number(item.price).toLocaleString()}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Stock: {item.quantity}
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-medium">₹{Number(item.price).toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Stock: {item.quantity}
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                ))
-              ) : searchQuery ? (
-                <div className="text-center py-4">
-                  <p className="text-sm text-muted-foreground mb-2">No products found</p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleAddCustomItem}
-                  >
-                    Add as Custom Item
-                  </Button>
-                </div>
+                    </button>
+                  ))
+                ) : searchQuery ? (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-muted-foreground mb-2">No products found</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAddCustomItem}
+                    >
+                      Add as Custom Item
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    Start typing to search products
+                  </p>
+                )
               ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  Start typing to search products
-                </p>
+                filteredServices.length > 0 ? (
+                  filteredServices.map((s: any) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => handleAddService(s)}
+                      className="w-full text-left p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-medium">{s.name}</p>
+                          <p className="text-xs text-muted-foreground">{s.description}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium">₹{Number(s.price).toLocaleString()}</p>
+                          <p className="text-xs text-muted-foreground">{s.unit}</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                ) : searchQuery ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">No services found</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">Start typing to search services</p>
+                )
               )}
             </div>
           </div>

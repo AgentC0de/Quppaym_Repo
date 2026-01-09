@@ -136,8 +136,8 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 sm:mb-8 lg:grid-cols-5">
+      {/* Stats Grid - responsive columns: denser as viewport shrinks */}
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 sm:mb-6">
         <StatCard
           title="Today's Sales"
           value={`₹${stats.todaySales.toLocaleString()}`}
@@ -175,18 +175,10 @@ const Dashboard = () => {
         />
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid gap-6 lg:grid-cols-3 lg:gap-8">
-        <div className="lg:col-span-2">
-          <RecentOrdersTable orders={recentOrders} />
-        </div>
-        <div>
-          <CustomerList customers={vipCustomers} />
-        </div>
-      </div>
-
-      {/* Tasks Section */}
-      <div className="mt-6 lg:mt-8">
+      {/* Main Content - stacked vertically on all screen sizes (Recent Orders, Customers, Today's Tasks) */}
+      <div className="flex flex-col gap-6">
+        <RecentOrdersTable orders={recentOrders} />
+        <CustomerList customers={vipCustomers} />
         <TaskList tasks={pendingTasks} />
       </div>
     </AppLayout>

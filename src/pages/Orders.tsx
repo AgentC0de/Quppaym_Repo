@@ -18,7 +18,7 @@ import { UpdateOrderStatusDialog } from "@/components/dialogs/UpdateOrderStatusD
 import { ScheduleFittingDialog } from "@/components/dialogs/ScheduleFittingDialog";
 import { OrderMeasurementsDialog } from "@/components/dialogs/OrderMeasurementsDialog";
 import { InvoiceViewDialog } from "@/components/dialogs/InvoiceViewDialog";
-import { Crown, MoreHorizontal, Search, Download, Eye, FileText, ShoppingBag, Loader2, Pencil, MessageCircle, Calendar, Ruler } from "lucide-react";
+import { Crown, MoreHorizontal, Search, Download, Upload, Eye, FileText, ShoppingBag, Loader2, Pencil, MessageCircle, Calendar, Ruler } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { format } from "date-fns";
+import { exportTableToPdf, type ColumnDef } from "@/lib/utils";
 import { useOrders } from "@/hooks/useOrders";
 import { useStores } from "@/hooks/useStores";
 import type { Database } from "@/integrations/supabase/types";
@@ -121,75 +122,112 @@ const Orders = () => {
 
   return (
     <AppLayout title="Orders" subtitle="Track and manage all customer orders">
-      {/* Filters and Actions */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 flex-wrap items-center gap-3">
-          <div className="relative w-full sm:w-auto sm:flex-1 sm:max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search orders..."
-              className="pl-10"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setCurrentPage(1);
-              }}
-            />
+      {/* Filters and Actions - stacked on mobile: 1) search, 2) dropdowns, 3) buttons */}
+      <div className="mb-6">
+        <div className="flex flex-col gap-3">
+          {/* Row 1: Search (full width on mobile) */}
+          <div className="w-full">
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search orders..."
+                className="pl-10 w-full"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
+              />
+            </div>
           </div>
-          <Select
-            value={statusFilter}
-            onValueChange={(value) => {
-              setStatusFilter(value);
-              setCurrentPage(1);
-            }}
-          >
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="deposit_paid">Deposit Paid</SelectItem>
-              <SelectItem value="materials_ordered">Materials Ordered</SelectItem>
-              <SelectItem value="in_production">In Production</SelectItem>
-              <SelectItem value="ready_for_fitting">Ready for Fitting</SelectItem>
-              <SelectItem value="ready_for_pickup">Ready for Pickup</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={storeFilter}
-            onValueChange={(value) => {
-              setStoreFilter(value);
-              setCurrentPage(1);
-            }}
-          >
-            <SelectTrigger className="w-36">
-              <SelectValue placeholder="Store" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Stores</SelectItem>
-              {stores.map((store) => (
-                <SelectItem key={store.id} value={store.id}>
-                  {store.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" className="gap-2">
-            <Download className="h-4 w-4" />
-            <span className="hidden sm:inline">Export</span>
-          </Button>
-          <OrderForm />
+
+          {/* Row 2: Dropdowns (left) and Actions (right) - stacked on mobile, single-line on sm+ */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex gap-3 w-full sm:justify-start">
+              <div className="w-full sm:w-auto">
+                <Select
+                  value={statusFilter}
+                  onValueChange={(value) => {
+                    setStatusFilter(value);
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-full sm:w-40">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="deposit_paid">Deposit Paid</SelectItem>
+                    <SelectItem value="materials_ordered">Materials Ordered</SelectItem>
+                    <SelectItem value="in_production">In Production</SelectItem>
+                    <SelectItem value="ready_for_fitting">Ready for Fitting</SelectItem>
+                    <SelectItem value="ready_for_pickup">Ready for Pickup</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="w-full sm:w-auto">
+                <Select
+                  value={storeFilter}
+                  onValueChange={(value) => {
+                    setStoreFilter(value);
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-full sm:w-36">
+                    <SelectValue placeholder="Store" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Stores</SelectItem>
+                    {stores.map((store) => (
+                      <SelectItem key={store.id} value={store.id}>
+                        {store.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 justify-between sm:justify-end sm:ml-auto">
+              <div className="flex items-center gap-3">
+                <Button variant="outline" className="gap-2">
+                  <Upload className="h-4 w-4" />
+                  <span className="inline">Import</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => {
+                    const cols: ColumnDef<any>[] = [
+                      { header: "Order #", render: (r) => r.order_number },
+                      { header: "Customer", render: (r) => r.customer_name },
+                      { header: "Total", render: (r) => r.total_amount },
+                      { header: "Status", render: (r) => r.status },
+                      { header: "Placed", render: (r) => format(new Date(r.created_at), "MMM d, yyyy") },
+                    ];
+                    exportTableToPdf("Orders", cols, filteredOrders);
+                  }}
+                >
+                  <Download className="h-4 w-4" />
+                  <span className="inline">Export</span>
+                </Button>
+              </div>
+
+              <div className="ml-3">
+                <OrderForm />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Orders Table */}
-      <div className="card-luxury overflow-hidden">
+      <div className="card-luxury overflow-hidden p-0">
         {paginatedOrders.length === 0 ? (
           <EmptyState
             icon={ShoppingBag}
@@ -345,20 +383,24 @@ const Orders = () => {
                 </tbody>
               </table>
             </div>
-            <PaginationControls
-              currentPage={currentPage}
-              totalPages={totalPages}
-              pageSize={pageSize}
-              totalItems={filteredOrders.length}
-              onPageChange={setCurrentPage}
-              onPageSizeChange={(size) => {
-                setPageSize(size);
-                setCurrentPage(1);
-              }}
-            />
           </>
         )}
       </div>
+
+      <div className="mt-3 flex justify-center px-4">
+        <PaginationControls
+          currentPage={currentPage}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          totalItems={filteredOrders.length}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setCurrentPage(1);
+          }}
+        />
+      </div>
+      
 
       <OrderViewDialog
         order={selectedOrder as any}

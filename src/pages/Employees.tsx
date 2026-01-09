@@ -2,7 +2,15 @@ import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { EmployeeForm } from "@/components/forms/EmployeeForm";
+import { EmployeeImport } from "@/components/employees/EmployeeImport";
 import { EmployeeViewDialog } from "@/components/dialogs/EmployeeViewDialog";
 import { Search, MoreHorizontal, UserCheck, UserX, Loader2, Eye, Pencil, Calendar, ClipboardList } from "lucide-react";
 import {
@@ -14,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useEmployees } from "@/hooks/useEmployees";
+import { useStores } from "@/hooks/useStores";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Users } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
@@ -25,16 +34,30 @@ type Employee = Database["public"]["Tables"]["employees"]["Row"] & {
 const Employees = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const { employees, isLoading } = useEmployees();
+  const { stores } = useStores();
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [storeFilter, setStoreFilter] = useState("all");
 
   const filteredEmployees = useMemo(() => {
-    return employees.filter((employee) =>
-      employee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      employee.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      employee.role.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [employees, searchQuery]);
+    return employees.filter((employee) => {
+      const matchesSearch =
+        employee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        employee.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        employee.role.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active" && employee.is_active) ||
+        (statusFilter === "inactive" && !employee.is_active);
+
+      const matchesStore =
+        storeFilter === "all" || (employee.store && employee.store.id === storeFilter);
+
+      return matchesSearch && matchesStatus && matchesStore;
+    });
+  }, [employees, searchQuery, statusFilter, storeFilter]);
 
   const formatRole = (role: string) => {
     return role
@@ -60,18 +83,67 @@ const Employees = () => {
 
   return (
     <AppLayout title="Employees" subtitle="Team management and task assignments">
-      {/* Actions */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1 sm:max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search employees..."
-            className="pl-10"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+      {/* Actions: Line1 search, Line2 left (filters) right (actions) */}
+      <div className="mb-6">
+        <div className="flex flex-col gap-3">
+          <div className="w-full">
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search employees..."
+                className="pl-10 w-full"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex gap-3 w-full sm:justify-start">
+              <div className="w-full sm:w-auto">
+                <Select
+                  value={statusFilter}
+                  onValueChange={(value) => setStatusFilter(value)}
+                >
+                  <SelectTrigger className="w-full sm:w-40">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="w-full sm:w-auto">
+                <Select
+                  value={storeFilter}
+                  onValueChange={(value) => setStoreFilter(value)}
+                >
+                  <SelectTrigger className="w-full sm:w-40">
+                    <SelectValue placeholder="Store" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Stores</SelectItem>
+                    {stores.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 justify-end sm:ml-auto">
+              <EmployeeImport />
+              <div className="ml-3">
+                <EmployeeForm />
+              </div>
+            </div>
+          </div>
         </div>
-        <EmployeeForm />
       </div>
 
       {/* Employee Cards Grid */}
@@ -82,7 +154,7 @@ const Employees = () => {
           description={searchQuery ? "No employees match your search." : "Add your first employee to get started."}
         />
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3">
           {filteredEmployees.map((employee) => (
             <div 
               key={employee.id} 

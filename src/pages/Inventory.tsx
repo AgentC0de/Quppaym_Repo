@@ -15,6 +15,8 @@ import { InventoryItemForm } from "@/components/forms/InventoryItemForm";
 import { InventoryImport } from "@/components/inventory/InventoryImport";
 import { InventoryViewDialog } from "@/components/dialogs/InventoryViewDialog";
 import { Search, Download, AlertTriangle, Package, Loader2, MoreHorizontal, Eye, Pencil, Trash2 } from "lucide-react";
+import { format } from "date-fns";
+import { exportTableToPdf, type ColumnDef } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useInventory } from "@/hooks/useInventory";
+import { useCategories } from "@/hooks/useCategories";
 import { useStores } from "@/hooks/useStores";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -47,10 +50,10 @@ const Inventory = () => {
     return inventory.filter((item) => item.quantity <= item.min_stock_level);
   }, [inventory]);
 
+  const { categories: canonicalCategories = [] } = useCategories();
   const categories = useMemo(() => {
-    const uniqueCategories = [...new Set(inventory.map((item) => item.category))];
-    return uniqueCategories.sort();
-  }, [inventory]);
+    return canonicalCategories.map((c) => c.name);
+  }, [canonicalCategories]);
 
   const filteredInventory = useMemo(() => {
     return inventory.filter((item) => {
@@ -103,72 +106,105 @@ const Inventory = () => {
         </div>
       )}
 
-      {/* Filters and Actions */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 flex-wrap items-center gap-3">
-          <div className="relative w-full sm:w-auto sm:flex-1 sm:max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search inventory..."
-              className="pl-10"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setCurrentPage(1);
-              }}
-            />
+      {/* Filters and Actions - stacked on mobile: 1) search, 2) dropdowns, 3) buttons */}
+      <div className="mb-6">
+        <div className="flex flex-col gap-3">
+          {/* Row 1: Search */}
+          <div className="w-full">
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search inventory..."
+                className="pl-10 w-full"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
+              />
+            </div>
           </div>
-          <Select
-            value={categoryFilter}
-            onValueChange={(value) => {
-              setCategoryFilter(value);
-              setCurrentPage(1);
-            }}
-          >
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {categories.map((category) => (
-                <SelectItem key={category} value={category.toLowerCase()}>
-                  {category}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={storeFilter}
-            onValueChange={(value) => {
-              setStoreFilter(value);
-              setCurrentPage(1);
-            }}
-          >
-            <SelectTrigger className="w-36">
-              <SelectValue placeholder="Store" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Stores</SelectItem>
-              {stores.map((store) => (
-                <SelectItem key={store.id} value={store.id}>
-                  {store.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center gap-3">
-          <InventoryImport />
-          <Button variant="outline" className="gap-2">
-            <Download className="h-4 w-4" />
-            <span className="hidden sm:inline">Export</span>
-          </Button>
-          <InventoryItemForm />
+
+          {/* Row 2: Dropdowns (left) and Actions (right) - stacked on mobile, single-line on sm+ */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex gap-3 w-full sm:flex-row sm:items-center sm:justify-start">
+              <div className="w-full sm:w-auto">
+                <Select
+                  value={categoryFilter}
+                  onValueChange={(value) => {
+                    setCategoryFilter(value);
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-full sm:w-40">
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categories.map((category) => (
+                      <SelectItem key={category} value={category.toLowerCase()}>
+                        {category}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="w-full sm:w-auto">
+                <Select
+                  value={storeFilter}
+                  onValueChange={(value) => {
+                    setStoreFilter(value);
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-full sm:w-36">
+                    <SelectValue placeholder="Store" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Stores</SelectItem>
+                    {stores.map((store) => (
+                      <SelectItem key={store.id} value={store.id}>
+                        {store.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 justify-between sm:justify-end sm:ml-auto">
+              <div className="flex items-center gap-3">
+                <InventoryImport />
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => {
+                    const cols: ColumnDef<InventoryItem>[] = [
+                      { header: "SKU", render: (i) => i.sku },
+                      { header: "Name", render: (i) => i.name },
+                      { header: "Stock", render: (i) => String(i.quantity) },
+                      { header: "Price", render: (i) => `₹${Number(i.price).toLocaleString()}` },
+                      { header: "Updated", render: (i) => i.updated_at ? format(new Date(i.updated_at), "MMM d, yyyy") : "" },
+                    ];
+                    exportTableToPdf("Inventory", cols, filteredInventory);
+                  }}
+                >
+                  <Download className="h-4 w-4" />
+                  <span className="inline">Export</span>
+                </Button>
+              </div>
+
+              <div className="ml-3">
+                <InventoryItemForm />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Inventory Table */}
-      <div className="card-luxury overflow-hidden">
+      <div className="card-luxury overflow-hidden p-0">
         {paginatedInventory.length === 0 ? (
           <EmptyState
             icon={Package}
@@ -283,20 +319,24 @@ const Inventory = () => {
                 </tbody>
               </table>
             </div>
-            <PaginationControls
-              currentPage={currentPage}
-              totalPages={totalPages}
-              pageSize={pageSize}
-              totalItems={filteredInventory.length}
-              onPageChange={setCurrentPage}
-              onPageSizeChange={(size) => {
-                setPageSize(size);
-                setCurrentPage(1);
-              }}
-            />
           </>
         )}
       </div>
+
+      <div className="mt-3 flex justify-center px-4">
+        <PaginationControls
+          currentPage={currentPage}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          totalItems={filteredInventory.length}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setCurrentPage(1);
+          }}
+        />
+      </div>
+      
 
       <InventoryViewDialog
         item={selectedItem}

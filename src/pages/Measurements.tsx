@@ -104,7 +104,7 @@ const Measurements = () => {
           description={searchQuery ? "No measurements match your search." : "Measurements are created through the Schedule Fitting action on orders."}
         />
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3">
           {filteredMeasurements.map((measurement) => {
             const previewFields = getPreviewFields(measurement);
             return (

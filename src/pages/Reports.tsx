@@ -51,14 +51,22 @@ const COLORS = ["hsl(345, 60%, 28%)", "hsl(42, 70%, 50%)", "hsl(345, 40%, 45%)",
 const Reports = () => {
   return (
     <AppLayout title="Reports" subtitle="Business analytics and insights">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
+      <div className="mb-4 flex items-center">
+        <div className="flex-1">
           <p className="text-sm text-muted-foreground">Reports are temporarily disabled for updates.</p>
         </div>
-        <div>
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-amber-100 text-amber-800 border border-amber-200">
-            Update Required
-          </span>
+        <div className="flex items-center w-full sm:w-auto justify-between sm:justify-end">
+          <div className="flex items-center gap-3">
+            <Button variant="outline" className="gap-2">
+              <Download className="h-4 w-4" />
+              Export Report
+            </Button>
+          </div>
+          <div className="hidden sm:block ml-3">
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-amber-100 text-amber-800 border border-amber-200">
+              Update Required
+            </span>
+          </div>
         </div>
       </div>
 

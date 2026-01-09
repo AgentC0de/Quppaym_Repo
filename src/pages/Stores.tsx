@@ -1,9 +1,17 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { StoreForm } from "@/components/forms/StoreForm";
 import { StoreViewDialog } from "@/components/dialogs/StoreViewDialog";
-import { MapPin, Phone, Clock, Mail, Loader2, Store, MoreHorizontal, Eye, Pencil } from "lucide-react";
+import { MapPin, Phone, Clock, Mail, Loader2, Store, MoreHorizontal, Eye, Pencil, Search, Trash } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,14 +25,32 @@ import type { Database } from "@/integrations/supabase/types";
 type StoreType = Database["public"]["Tables"]["stores"]["Row"];
 
 const Stores = () => {
-  const { stores, isLoading } = useStores();
+  const { stores, isLoading, deleteStore, reactivateStore, permanentDeleteStore } = useStores();
   const [selectedStore, setSelectedStore] = useState<StoreType | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const handleViewStore = (store: StoreType) => {
     setSelectedStore(store);
     setViewDialogOpen(true);
   };
+
+  const filteredStores = useMemo(() => {
+    return stores.filter((s) => {
+      const matchesSearch =
+        s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (s.city || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (s.address || "").toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active" && s.is_active) ||
+        (statusFilter === "inactive" && !s.is_active);
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [stores, searchQuery, statusFilter]);
 
   if (isLoading) {
     return (
@@ -38,20 +64,56 @@ const Stores = () => {
 
   return (
     <AppLayout title="Store Locations" subtitle="Manage your boutique locations">
-      <div className="mb-6 flex items-center justify-end">
-        <StoreForm />
-      </div>
+      {/* Actions: optional search + actions row */}
+      <div className="mb-6">
+        <div className="flex flex-col gap-3">
+          <div className="w-full">
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search stores..."
+                className="pl-10 w-full"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
 
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-start">
+              <div className="w-full sm:w-auto">
+                <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v)}>
+                  <SelectTrigger className="w-full sm:w-40">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 justify-between sm:justify-end sm:ml-auto w-full sm:w-auto">
+              <div />
+              <div className="ml-3">
+                <StoreForm />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
       {/* Store Cards Grid */}
-      {stores.length === 0 ? (
+      {filteredStores.length === 0 ? (
         <EmptyState
           icon={Store}
           title="No stores found"
-          description="Add your first store location to get started."
+          description={searchQuery ? "No stores match your search." : "Add your first store location to get started."}
         />
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {stores.map((store) => (
+        <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3">
+          {filteredStores.map((store) => (
             <div 
               key={store.id} 
               className="card-luxury overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
@@ -80,6 +142,29 @@ const Stores = () => {
                       <DropdownMenuItem onClick={() => handleViewStore(store)} className="gap-2">
                         <Pencil className="h-4 w-4" />
                         Edit Store
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="gap-2" onClick={() => {
+                        if (store.is_active) {
+                          if (confirm("Deactivate this store?")) {
+                            deleteStore.mutate(store.id);
+                          }
+                        } else {
+                          reactivateStore.mutate(store.id);
+                        }
+                      }}>
+                        {store.is_active ? (
+                          <Trash className="h-4 w-4" />
+                        ) : (
+                          <Trash className="h-4 w-4" />
+                        )}
+                        {store.is_active ? "Deactivate" : "Reactivate"}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="gap-2 text-destructive" onClick={() => {
+                        const ok = confirm("Permanently delete this store? This action cannot be undone.");
+                        if (ok) permanentDeleteStore.mutate(store.id);
+                      }}>
+                        <Trash className="h-4 w-4" />
+                        Delete
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

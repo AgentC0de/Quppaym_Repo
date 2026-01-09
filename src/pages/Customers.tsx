@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { format } from "date-fns";
+import { exportTableToPdf, type ColumnDef } from "@/lib/utils";
 import type { Database } from "@/integrations/supabase/types";
 
 type Customer = Database["public"]["Tables"]["customers"]["Row"];
@@ -78,49 +79,79 @@ const Customers = () => {
 
   return (
     <AppLayout title="Customers" subtitle="Manage your customer relationships">
-      {/* Filters and Actions */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 items-center gap-3">
-          <div className="relative flex-1 sm:max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search customers..."
-              className="pl-10"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setCurrentPage(1);
-              }}
-            />
+      {/* Filters and Actions - stacked on mobile: 1) search, 2) dropdowns, 3) buttons */}
+      <div className="mb-6">
+        <div className="flex flex-col gap-3">
+          {/* Row 1: Search */}
+          <div className="w-full">
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search customers..."
+                className="pl-10 w-full"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
+              />
+            </div>
           </div>
-          <Select
-            value={vipFilter}
-            onValueChange={(value) => {
-              setVipFilter(value);
-              setCurrentPage(1);
-            }}
-          >
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="VIP Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Customers</SelectItem>
-              <SelectItem value="vip">VIP Only</SelectItem>
-              <SelectItem value="regular">Regular</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" className="gap-2">
-            <Download className="h-4 w-4" />
-            <span className="hidden sm:inline">Export</span>
-          </Button>
-          <CustomerForm />
+
+          {/* Row 2: Dropdowns (left) and Actions (right) - stacked on mobile, single-line on sm+ */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-1 sm:justify-start">
+              <div className="w-full sm:w-auto sm:flex-1">
+                <Select
+                  value={vipFilter}
+                  onValueChange={(value) => {
+                    setVipFilter(value);
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-full sm:w-40">
+                    <SelectValue placeholder="VIP Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Customers</SelectItem>
+                    <SelectItem value="vip">VIP Only</SelectItem>
+                    <SelectItem value="regular">Regular</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 justify-between sm:justify-end sm:ml-auto">
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => {
+                    const cols: ColumnDef<Customer>[] = [
+                      { header: "Name", render: (c) => c.name },
+                      { header: "Phone", render: (c) => c.phone },
+                      { header: "Email", render: (c) => c.email || "" },
+                      { header: "VIP", render: (c) => c.vip_status },
+                      { header: "Created", render: (c) => format(new Date(c.created_at), "MMM d, yyyy") },
+                    ];
+                    exportTableToPdf("Customers", cols, filteredCustomers);
+                  }}
+                >
+                  <Download className="h-4 w-4" />
+                  <span className="inline">Export</span>
+                </Button>
+              </div>
+
+              <div className="ml-3">
+                <CustomerForm />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Customers Table */}
-      <div className="card-luxury overflow-hidden">
+      <div className="card-luxury overflow-hidden p-0">
         {paginatedCustomers.length === 0 ? (
           <EmptyState
             icon={Users}
@@ -131,8 +162,60 @@ const Customers = () => {
           />
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full">
+            {/* Mobile: stacked customer cards */}
+            <div className="space-y-3 sm:hidden">
+              {paginatedCustomers.map((customer) => (
+                <div
+                  key={customer.id}
+                  className="card-luxury p-4 transition-colors hover:bg-muted/20 cursor-pointer"
+                  onClick={() => handleViewCustomer(customer)}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 font-display text-sm font-semibold text-primary">
+                        {customer.name.charAt(0)}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-foreground">{customer.name}</span>
+                          {customer.vip_status !== "regular" && (
+                            <Crown className="h-4 w-4 text-gold" />
+                          )}
+                        </div>
+                        <p className="mt-1 text-sm text-muted-foreground">{customer.phone}</p>
+                        {customer.email && (
+                          <p className="mt-1 text-sm text-muted-foreground">{customer.email}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className={`status-badge ${
+                        customer.vip_status === "platinum" ? "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400" :
+                        customer.vip_status === "gold" ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400" :
+                        customer.vip_status === "silver" ? "bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-400" :
+                        "bg-secondary text-secondary-foreground"
+                      }`}>{customer.vip_status}</span>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleViewCustomer(customer)} className="gap-2">View Profile</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleViewCustomer(customer)} className="gap-2">Edit Customer</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleWhatsApp(customer.phone)} className="gap-2">Send WhatsApp</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop/table view */}
+            <div className="overflow-x-auto hidden sm:block">
+                <table className="w-full">
                 <thead>
                   <tr className="border-b border-border bg-muted/30">
                     <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground md:px-6">
@@ -235,20 +318,24 @@ const Customers = () => {
                 </tbody>
               </table>
             </div>
-            <PaginationControls
-              currentPage={currentPage}
-              totalPages={totalPages}
-              pageSize={pageSize}
-              totalItems={filteredCustomers.length}
-              onPageChange={setCurrentPage}
-              onPageSizeChange={(size) => {
-                setPageSize(size);
-                setCurrentPage(1);
-              }}
-            />
           </>
         )}
       </div>
+
+      <div className="mt-3 flex justify-center px-4">
+        <PaginationControls
+          currentPage={currentPage}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          totalItems={filteredCustomers.length}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setCurrentPage(1);
+          }}
+        />
+      </div>
+      
 
       <CustomerViewDialog
         customer={selectedCustomer}
