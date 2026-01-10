@@ -43,6 +43,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useCustomers } from "@/hooks/useCustomers";
 import { useOrders } from "@/hooks/useOrders";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
 
 type Customer = Database["public"]["Tables"]["customers"]["Row"];
@@ -71,6 +73,7 @@ export function CustomerViewDialog({ customer, open, onOpenChange }: CustomerVie
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
   const { updateCustomer, deleteCustomer } = useCustomers();
   const { orders } = useOrders();
+  const { toast } = useToast();
 
   // Get all orders for this customer
   const customerOrders = useMemo(() => {
@@ -144,6 +147,56 @@ export function CustomerViewDialog({ customer, open, onOpenChange }: CustomerVie
         handleClose();
       },
     });
+  };
+
+  // Cascade-delete related data (order_items, payment_history, measurements, measurement_versions, orders)
+  const handleDeleteCascade = async () => {
+    if (!customer) return;
+    try {
+      const orderIds = customerOrders.map((o) => o.id);
+
+      if (orderIds.length > 0) {
+        // delete order items
+        const { error: oiErr } = await supabase.from("order_items").delete().in("order_id", orderIds);
+        if (oiErr) throw oiErr;
+
+        // delete payment history
+        const { error: phErr } = await supabase.from("payment_history").delete().in("order_id", orderIds);
+        if (phErr) throw phErr;
+
+        // fetch measurements for these orders
+        const { data: measurementsData, error: mErr } = await supabase
+          .from("measurements")
+          .select("id")
+          .in("order_id", orderIds);
+        if (mErr) throw mErr;
+        const measurementIds = (measurementsData || []).map((m: any) => m.id);
+
+        if (measurementIds.length > 0) {
+          // delete measurement_versions referencing these measurements
+          const { error: mvErr } = await supabase.from("measurement_versions").delete().in("measurement_id", measurementIds);
+          if (mvErr) throw mvErr;
+
+          // delete measurements
+          const { error: mdelErr } = await supabase.from("measurements").delete().in("id", measurementIds);
+          if (mdelErr) throw mdelErr;
+        }
+
+        // delete orders
+        const { error: oErr } = await supabase.from("orders").delete().in("id", orderIds);
+        if (oErr) throw oErr;
+      }
+
+      // finally delete customer
+      const { error: cErr } = await supabase.from("customers").delete().eq("id", customer.id);
+      if (cErr) throw cErr;
+
+      toast({ title: "Customer deleted", description: "Customer and related data removed." });
+      setShowDeleteAlert(false);
+      handleClose();
+    } catch (err: any) {
+      toast({ title: "Error", description: err?.message || String(err), variant: "destructive" });
+    }
   };
 
   if (!customer) return null;
@@ -464,11 +517,31 @@ export function CustomerViewDialog({ customer, open, onOpenChange }: CustomerVie
               Are you sure you want to delete {customer.name}? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              {deleteCustomer.isPending ? "Deleting..." : "Delete"}
-            </AlertDialogAction>
+          <AlertDialogFooter className="flex-col sm:flex-row sm:justify-between gap-2">
+            <div className="w-full sm:w-auto text-sm text-muted-foreground mb-2 sm:mb-0">
+              {customerOrders.length > 0 ? (
+                <>
+                  This customer has <strong>{customerOrders.length}</strong> related order(s). Deleting the customer without removing related orders will fail due to database constraints.
+                </>
+              ) : (
+                <>This action will permanently delete the customer.</>
+              )}
+            </div>
+
+            <div className="flex gap-2 w-full sm:w-auto">
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <Button
+                variant="outline"
+                onClick={handleDelete}
+                disabled={customerOrders.length > 0 || deleteCustomer.isPending}
+                className="w-full sm:w-auto"
+              >
+                {deleteCustomer.isPending ? "Deleting..." : "Delete Customer"}
+              </Button>
+              <AlertDialogAction onClick={handleDeleteCascade} className="bg-destructive text-destructive-foreground hover:bg-destructive/90 w-full sm:w-auto">
+                Delete Customer and Related Data
+              </AlertDialogAction>
+            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
