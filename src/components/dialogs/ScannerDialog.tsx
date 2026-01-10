@@ -16,6 +16,7 @@ export function ScannerDialog({ open, onOpenChange, onDetected }: ScannerDialogP
   const [scanning, setScanning] = useState(false);
   const processingRef = useRef(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [videoReady, setVideoReady] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -45,7 +46,7 @@ export function ScannerDialog({ open, onOpenChange, onDetected }: ScannerDialogP
             if (typeof codeReader.decodeFromConstraints === "function") {
               // @ts-ignore
               await codeReader.decodeFromConstraints(constraints, videoRef.current as HTMLVideoElement, async (result, err) => {
-                if (!result) return;
+                    if (!result) return;
                 if (processingRef.current) return;
                 processingRef.current = true;
                 try {
@@ -58,7 +59,8 @@ export function ScannerDialog({ open, onOpenChange, onDetected }: ScannerDialogP
                 } catch (e) {
                   // swallow but allow retry
                 } finally {
-                  processingRef.current = false;
+                      // keep a short cooldown to avoid duplicate callbacks
+                      setTimeout(() => { processingRef.current = false; }, 700);
                 }
               });
               started = true;
@@ -90,7 +92,7 @@ export function ScannerDialog({ open, onOpenChange, onDetected }: ScannerDialogP
             } catch (e) {
               // swallow but allow retry
             } finally {
-              processingRef.current = false;
+              setTimeout(() => { processingRef.current = false; }, 700);
             }
           });
         }
@@ -112,6 +114,7 @@ export function ScannerDialog({ open, onOpenChange, onDetected }: ScannerDialogP
       } catch (e) {}
       readerRef.current = null;
       setScanning(false);
+      setVideoReady(false);
     };
   }, [open, onDetected, onOpenChange]);
 
@@ -123,12 +126,18 @@ export function ScannerDialog({ open, onOpenChange, onDetected }: ScannerDialogP
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <div className="w-full h-64 bg-black/5 rounded overflow-hidden flex items-center justify-center">
-            <video ref={videoRef} className="w-full h-full object-cover" />
+            <video
+              ref={videoRef}
+              className="w-full h-full object-cover"
+              onLoadedMetadata={() => setVideoReady(true)}
+              onPlaying={() => setVideoReady(true)}
+            />
           </div>
-            {statusMessage ? (
+            {!videoReady && (
+              <div className="text-sm text-center text-muted-foreground">Initializing camera...</div>
+            )}
+            {statusMessage && (
               <div className="text-sm text-center text-destructive">{statusMessage}</div>
-            ) : (
-              <div className="text-xs text-muted-foreground text-center">Point camera at barcode</div>
             )}
           <div className="flex justify-end">
             <Button variant="outline" onClick={() => onOpenChange(false)}>

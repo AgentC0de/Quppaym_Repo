@@ -246,6 +246,21 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
     const found = inventory.find((it) => (it.sku || "").toLowerCase() === q.toLowerCase());
     let itemToAdd = found;
 
+    // If SKU matches an existing order item, increment its quantity instead of adding a duplicate
+    if (found) {
+      const existingIndex = orderItems.findIndex((it) => it.inventoryId === found.id);
+      if (existingIndex !== -1) {
+        setOrderItems((prev) =>
+          prev.map((it, idx) =>
+            idx === existingIndex ? { ...it, quantity: Number(it.quantity || 0) + 1 } : it
+          )
+        );
+        toast({ title: 'Updated', description: `${found.name} quantity incremented` });
+        setSearchQuery("");
+        return true;
+      }
+    }
+
     if (!itemToAdd) {
       const matches = inventory.filter((it) => {
         const sku = (it.sku || "").toLowerCase();
