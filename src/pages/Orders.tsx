@@ -30,6 +30,7 @@ import { format } from "date-fns";
 import { exportTableToPdf, type ColumnDef } from "@/lib/utils";
 import { useOrders } from "@/hooks/useOrders";
 import { useStores } from "@/hooks/useStores";
+import { useOrderStatusSettings } from "@/hooks/useStatusSettings";
 import type { Database } from "@/integrations/supabase/types";
 
 type OrderRow = Database["public"]["Tables"]["orders"]["Row"];
@@ -55,6 +56,7 @@ const Orders = () => {
 
   const { orders, isLoading, error } = useOrders();
   const { stores } = useStores();
+  const { orderStatuses } = useOrderStatusSettings();
 
   if (error) {
     return (
@@ -157,15 +159,27 @@ const Orders = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="deposit_paid">Deposit Paid</SelectItem>
-                    <SelectItem value="materials_ordered">Materials Ordered</SelectItem>
-                    <SelectItem value="in_production">In Production</SelectItem>
-                    <SelectItem value="ready_for_fitting">Ready for Fitting</SelectItem>
-                    <SelectItem value="ready_for_pickup">Ready for Pickup</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                    {orderStatuses && orderStatuses.length > 0 ? (
+                      orderStatuses
+                        .filter((s) => s.is_active)
+                        .map((s) => (
+                          <SelectItem key={s.id} value={s.code}>
+                            {s.label}
+                          </SelectItem>
+                        ))
+                    ) : (
+                      <>
+                        <SelectItem value="draft">Draft</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="deposit_paid">Deposit Paid</SelectItem>
+                        <SelectItem value="materials_ordered">Materials Ordered</SelectItem>
+                        <SelectItem value="in_production">In Production</SelectItem>
+                        <SelectItem value="ready_for_fitting">Ready for Fitting</SelectItem>
+                        <SelectItem value="ready_for_pickup">Ready for Pickup</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
