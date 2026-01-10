@@ -510,37 +510,31 @@ export function CustomerViewDialog({ customer, open, onOpenChange }: CustomerVie
       </Dialog>
 
       <AlertDialog open={showDeleteAlert} onOpenChange={setShowDeleteAlert}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-sm p-4">
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Customer</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete {customer.name}? This action cannot be undone.
+            <AlertDialogTitle className="text-base">Delete Customer</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground">
+              {customerOrders.length > 0 ? (
+                <>Deleting <strong>{customer.name}</strong> requires removing <strong>{customerOrders.length}</strong> related order(s). Choose a cascade delete to remove related data.</>
+              ) : (
+                <>Are you sure you want to delete <strong>{customer.name}</strong>? This action cannot be undone.</>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col sm:flex-row sm:justify-between gap-2">
-            <div className="w-full sm:w-auto text-sm text-muted-foreground mb-2 sm:mb-0">
-              {customerOrders.length > 0 ? (
-                <>
-                  This customer has <strong>{customerOrders.length}</strong> related order(s). Deleting the customer without removing related orders will fail due to database constraints.
-                </>
-              ) : (
-                <>This action will permanently delete the customer.</>
-              )}
+
+          <AlertDialogFooter className="flex flex-col gap-2">
+            <div className="flex gap-2 w-full">
+              <AlertDialogCancel className="flex-1">Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteCascade}
+                className="flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete and Cascade
+              </AlertDialogAction>
             </div>
 
-            <div className="flex gap-2 w-full sm:w-auto">
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <Button
-                variant="outline"
-                onClick={handleDelete}
-                disabled={customerOrders.length > 0 || deleteCustomer.isPending}
-                className="w-full sm:w-auto"
-              >
-                {deleteCustomer.isPending ? "Deleting..." : "Delete Customer"}
-              </Button>
-              <AlertDialogAction onClick={handleDeleteCascade} className="bg-destructive text-destructive-foreground hover:bg-destructive/90 w-full sm:w-auto">
-                Delete Customer and Related Data
-              </AlertDialogAction>
+            <div className="text-xs text-muted-foreground">
+              <strong>Note:</strong> Cascade will delete related order items, payments, measurements, and orders before removing the customer.
             </div>
           </AlertDialogFooter>
         </AlertDialogContent>
