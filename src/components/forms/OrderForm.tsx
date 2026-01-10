@@ -284,6 +284,7 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
 
   const [showScanner, setShowScanner] = useState(false);
   const [searchMode, setSearchMode] = useState<"products" | "services">("products");
+  const [dueOpen, setDueOpen] = useState(false);
 
   // Handle measurement requirement response (after order creation)
   const handleMeasurementRequired = (required: boolean) => {
@@ -632,7 +633,7 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
                       <FormLabel>Due Date *</FormLabel>
-                      <Popover>
+                      <Popover open={dueOpen} onOpenChange={setDueOpen}>
                         <PopoverTrigger asChild>
                           <FormControl>
                             <Button
@@ -651,7 +652,10 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
                           <Calendar
                             mode="single"
                             selected={field.value}
-                            onSelect={field.onChange}
+                            onSelect={(date) => {
+                              field.onChange(date);
+                              setDueOpen(false);
+                            }}
                             disabled={(date) => date < new Date()}
                             initialFocus
                             className="pointer-events-auto"

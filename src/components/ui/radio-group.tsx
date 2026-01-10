@@ -8,7 +8,10 @@ const RadioGroup = React.forwardRef<
   React.ElementRef<typeof RadioGroupPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Root>
 >(({ className, ...props }, ref) => {
-  return <RadioGroupPrimitive.Root className={cn("grid gap-2", className)} {...props} ref={ref} />;
+  // Use a horizontal flex layout by default and keep consistent spacing.
+  // This prevents layout surprises when parent containers change responsively.
+  // Allow wrapping of radio options and keep consistent spacing
+  return <RadioGroupPrimitive.Root className={cn("flex flex-wrap items-center gap-2", className)} {...props} ref={ref} />;
 });
 RadioGroup.displayName = RadioGroupPrimitive.Root.displayName;
 
@@ -20,7 +23,9 @@ const RadioGroupItem = React.forwardRef<
     <RadioGroupPrimitive.Item
       ref={ref}
       className={cn(
-        "aspect-square h-4 w-4 rounded-full border border-primary text-primary ring-offset-background focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+        // fixed size (won't grow/shrink) so the icon remains stable across breakpoints
+        // use inline-flex and aspect-square to ensure the control stays perfectly circular
+        "inline-flex flex-none items-center justify-center aspect-square h-4 w-4 min-w-4 min-h-4 rounded-full border border-primary text-primary ring-offset-background focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}
       {...props}

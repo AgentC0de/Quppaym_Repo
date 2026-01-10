@@ -152,24 +152,31 @@ export function MaterialsUploadDialog({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          <RadioGroup
-            value={materialsProvided || ""}
-            onValueChange={setMaterialsProvided}
-            className="space-y-3"
-          >
-            <div className="flex items-center space-x-3 p-3 rounded-lg border border-border hover:bg-muted/50 cursor-pointer">
-              <RadioGroupItem value="yes" id="yes" />
-              <Label htmlFor="yes" className="cursor-pointer flex-1">
-                Yes, customer provided materials
-              </Label>
-            </div>
-            <div className="flex items-center space-x-3 p-3 rounded-lg border border-border hover:bg-muted/50 cursor-pointer">
-              <RadioGroupItem value="no" id="no" />
-              <Label htmlFor="no" className="cursor-pointer flex-1">
-                No, using store materials
-              </Label>
-            </div>
-          </RadioGroup>
+          <div className="space-y-3">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="radio"
+                name="materialsProvided"
+                value="yes"
+                checked={materialsProvided === "yes"}
+                onChange={() => setMaterialsProvided("yes")}
+                className="h-4 w-4 text-primary focus:ring-primary"
+              />
+              <span className="text-sm">Yes, customer provided materials</span>
+            </label>
+
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="radio"
+                name="materialsProvided"
+                value="no"
+                checked={materialsProvided === "no"}
+                onChange={() => setMaterialsProvided("no")}
+                className="h-4 w-4 text-primary focus:ring-primary"
+              />
+              <span className="text-sm">No, using store materials</span>
+            </label>
+          </div>
 
           {materialsProvided === "yes" && (
             <div className="space-y-4">

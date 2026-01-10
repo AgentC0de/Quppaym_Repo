@@ -43,8 +43,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useCustomers } from "@/hooks/useCustomers";
 import { useOrders } from "@/hooks/useOrders";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
 
 type Customer = Database["public"]["Tables"]["customers"]["Row"];
@@ -71,9 +69,9 @@ interface CustomerViewDialogProps {
 export function CustomerViewDialog({ customer, open, onOpenChange }: CustomerViewDialogProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
+  const [ackCascade, setAckCascade] = useState(false);
   const { updateCustomer, deleteCustomer } = useCustomers();
   const { orders } = useOrders();
-  const { toast } = useToast();
 
   // Get all orders for this customer
   const customerOrders = useMemo(() => {
@@ -139,64 +137,15 @@ export function CustomerViewDialog({ customer, open, onOpenChange }: CustomerVie
     );
   };
 
-  const handleDelete = () => {
+  const handleDelete = (cascade = false) => {
     if (!customer) return;
-    deleteCustomer.mutate(customer.id, {
+    const payload = cascade ? { id: customer.id, cascade: true } : customer.id;
+    deleteCustomer.mutate(payload, {
       onSuccess: () => {
         setShowDeleteAlert(false);
         handleClose();
       },
     });
-  };
-
-  // Cascade-delete related data (order_items, payment_history, measurements, measurement_versions, orders)
-  const handleDeleteCascade = async () => {
-    if (!customer) return;
-    try {
-      const orderIds = customerOrders.map((o) => o.id);
-
-      if (orderIds.length > 0) {
-        // delete order items
-        const { error: oiErr } = await supabase.from("order_items").delete().in("order_id", orderIds);
-        if (oiErr) throw oiErr;
-
-        // delete payment history
-        const { error: phErr } = await supabase.from("payment_history").delete().in("order_id", orderIds);
-        if (phErr) throw phErr;
-
-        // fetch measurements for these orders
-        const { data: measurementsData, error: mErr } = await supabase
-          .from("measurements")
-          .select("id")
-          .in("order_id", orderIds);
-        if (mErr) throw mErr;
-        const measurementIds = (measurementsData || []).map((m: any) => m.id);
-
-        if (measurementIds.length > 0) {
-          // delete measurement_versions referencing these measurements
-          const { error: mvErr } = await supabase.from("measurement_versions").delete().in("measurement_id", measurementIds);
-          if (mvErr) throw mvErr;
-
-          // delete measurements
-          const { error: mdelErr } = await supabase.from("measurements").delete().in("id", measurementIds);
-          if (mdelErr) throw mdelErr;
-        }
-
-        // delete orders
-        const { error: oErr } = await supabase.from("orders").delete().in("id", orderIds);
-        if (oErr) throw oErr;
-      }
-
-      // finally delete customer
-      const { error: cErr } = await supabase.from("customers").delete().eq("id", customer.id);
-      if (cErr) throw cErr;
-
-      toast({ title: "Customer deleted", description: "Customer and related data removed." });
-      setShowDeleteAlert(false);
-      handleClose();
-    } catch (err: any) {
-      toast({ title: "Error", description: err?.message || String(err), variant: "destructive" });
-    }
   };
 
   if (!customer) return null;
@@ -510,33 +459,58 @@ export function CustomerViewDialog({ customer, open, onOpenChange }: CustomerVie
       </Dialog>
 
       <AlertDialog open={showDeleteAlert} onOpenChange={setShowDeleteAlert}>
-        <AlertDialogContent className="max-w-sm p-4">
+        <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-base">Delete Customer</AlertDialogTitle>
-            <AlertDialogDescription className="text-sm text-muted-foreground">
-              {customerOrders.length > 0 ? (
-                <>Deleting <strong>{customer.name}</strong> requires removing <strong>{customerOrders.length}</strong> related order(s). Choose a cascade delete to remove related data.</>
-              ) : (
-                <>Are you sure you want to delete <strong>{customer.name}</strong>? This action cannot be undone.</>
-              )}
-            </AlertDialogDescription>
+            <AlertDialogTitle>Delete Customer</AlertDialogTitle>
           </AlertDialogHeader>
 
-          <AlertDialogFooter className="flex flex-col gap-2">
-            <div className="flex gap-2 w-full">
-              <AlertDialogCancel className="flex-1">Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDeleteCascade}
-                className="flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Delete and Cascade
-              </AlertDialogAction>
-            </div>
+          {customerOrders.length > 0 ? (
+            <div className="p-4">
+              <h3 className="text-lg font-medium mb-2">Delete Customer</h3>
+              <p className="text-sm mb-3">Deleting <strong>{customer.name}</strong> requires removing <strong>{customerOrders.length}</strong> related order(s).</p>
 
-            <div className="text-xs text-muted-foreground">
-              <strong>Note:</strong> Cascade will delete related order items, payments, measurements, and orders before removing the customer.
+              <label className="flex items-start gap-2 mb-3 text-sm">
+                <input
+                  type="checkbox"
+                  className="form-checkbox mt-1"
+                  checked={ackCascade}
+                  onChange={(e) => setAckCascade(e.target.checked)}
+                />
+                <div>
+                  <div className="font-medium">I understand</div>
+                  <div className="text-xs text-muted-foreground">This will permanently delete {customerOrders.length} related order(s) and associated data.</div>
+                </div>
+              </label>
+
+              <div className="flex items-center gap-2">
+                <AlertDialogCancel asChild>
+                  <Button variant="outline" size="sm">Cancel</Button>
+                </AlertDialogCancel>
+                <Button
+                  size="sm"
+                  onClick={() => handleDelete(true)}
+                  disabled={!ackCascade || deleteCustomer.isPending}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {deleteCustomer.isPending ? "Deleting..." : "Delete and Cascade"}
+                </Button>
+              </div>
+
+              <p className="text-xs text-muted-foreground mt-3">Note: Cascade will delete related order items, payments, measurements, and orders before removing the customer.</p>
             </div>
-          </AlertDialogFooter>
+          ) : (
+            <>
+              <AlertDialogDescription>
+                Are you sure you want to delete {customer.name}? This action cannot be undone.
+              </AlertDialogDescription>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => handleDelete(false)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  {deleteCustomer.isPending ? "Deleting..." : "Delete"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
         </AlertDialogContent>
       </AlertDialog>
     </>

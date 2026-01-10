@@ -79,7 +79,58 @@ export function useCustomers() {
   });
 
   const deleteCustomer = useMutation({
-    mutationFn: async (id: string) => {
+    // Accept either an id string or `{ id, cascade?: boolean }`.
+    mutationFn: async (idOrPayload: string | { id: string; cascade?: boolean }) => {
+      const id = typeof idOrPayload === "string" ? idOrPayload : idOrPayload.id;
+      const cascade = typeof idOrPayload === "string" ? false : idOrPayload.cascade ?? false;
+
+      if (cascade) {
+        // Find orders for this customer
+        const { data: orders, error: ordersErr } = await supabase
+          .from("orders")
+          .select("id")
+          .eq("customer_id", id);
+        if (ordersErr) throw ordersErr;
+
+        const orderIds = (orders || []).map((o: any) => o.id);
+
+        if (orderIds.length > 0) {
+          // Delete order_items
+          const { error: delItemsErr } = await supabase.from("order_items").delete().in("order_id", orderIds);
+          if (delItemsErr) throw delItemsErr;
+
+          // Delete payment history
+          const { error: delPaymentsErr } = await supabase.from("payment_history").delete().in("order_id", orderIds);
+          if (delPaymentsErr) throw delPaymentsErr;
+
+          // Delete fitting appointments
+          const { error: delFittingsErr } = await supabase.from("fitting_appointments").delete().in("order_id", orderIds);
+          if (delFittingsErr) throw delFittingsErr;
+
+          // Delete adjustment history referencing orders
+          const { error: delAdjErr } = await supabase.from("adjustment_history").delete().in("order_id", orderIds);
+          if (delAdjErr) throw delAdjErr;
+
+          // Delete measurements and their versions linked to these orders
+          const { data: measurements, error: measurementsErr } = await supabase
+            .from("measurements")
+            .select("id")
+            .in("order_id", orderIds);
+          if (measurementsErr) throw measurementsErr;
+          const measurementIds = (measurements || []).map((m: any) => m.id);
+          if (measurementIds.length > 0) {
+            const { error: delVersionsErr } = await supabase.from("measurement_versions").delete().in("measurement_id", measurementIds);
+            if (delVersionsErr) throw delVersionsErr;
+          }
+          const { error: delMeasurementsErr } = await supabase.from("measurements").delete().in("order_id", orderIds);
+          if (delMeasurementsErr) throw delMeasurementsErr;
+
+          // Finally delete orders
+          const { error: delOrdersErr } = await supabase.from("orders").delete().in("id", orderIds);
+          if (delOrdersErr) throw delOrdersErr;
+        }
+      }
+
       const { error } = await supabase
         .from("customers")
         .delete()
