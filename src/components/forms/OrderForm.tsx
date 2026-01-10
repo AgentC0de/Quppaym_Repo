@@ -103,6 +103,7 @@ const defaultValues: OrderFormData = {
 export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
   const [open, setOpen] = useState(false);
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [qtyEdits, setQtyEdits] = useState<Record<string, string>>({});
   const [showProductSearch, setShowProductSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showMeasurementPrompt, setShowMeasurementPrompt] = useState(false);
@@ -323,20 +324,19 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
     setOrderItems(orderItems.filter((item) => item.id !== itemId));
   };
 
-  // Update item quantity. Allow temporary empty input while typing and
-  // remove the item when quantity is set to 0.
+  // Update item quantity. Allow temporary empty input while typing.
+  // Do NOT remove item here; removal (filtering) happens at submit if quantity <= 0.
   const handleUpdateQuantity = (itemId: string, raw: string | number) => {
     const valueStr = typeof raw === "number" ? String(raw) : raw;
     setOrderItems((prev) =>
-      prev.flatMap((item) => {
-        if (item.id !== itemId) return [item];
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
         // allow empty string while user is editing
-        if (valueStr === "") return [{ ...item, quantity: "" }];
+        if (valueStr === "") return { ...item, quantity: "" };
         const n = Number(valueStr);
-        if (Number.isNaN(n)) return [item];
-        // treat zero or negative as remove
-        if (n <= 0) return [];
-        return [{ ...item, quantity: n }];
+        if (Number.isNaN(n)) return item;
+        // allow zero here; we'll filter out on submit
+        return { ...item, quantity: n };
       })
     );
   };
@@ -372,7 +372,7 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
         onSuccess: async (createdOrder) => {
           // Insert order items if order was created successfully
           if (createdOrder && orderItems.length > 0) {
-            const orderItemsToInsert = orderItems.map((item) => ({
+            const normalized = orderItems.map((item) => ({
               order_id: createdOrder.id,
               description: item.name,
               unit_price: item.price,
@@ -382,18 +382,19 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
               service_id: (item as any).serviceId || null,
               measurement_id: item.measurementId,
               is_custom_work: item.isCustomWork,
-            }));
+            })).filter((it) => Number(it.quantity) > 0);
 
-            const { error } = await supabase
-              .from("order_items")
-              .insert(orderItemsToInsert);
-
-            if (error) {
-              toast({
-                title: "Warning",
-                description: "Order created but failed to add some items.",
-                variant: "destructive",
-              });
+            if (normalized.length === 0) {
+              toast({ title: "No items", description: "Add at least one item with quantity > 0", variant: "destructive" });
+            } else {
+              const { error } = await supabase.from("order_items").insert(normalized);
+              if (error) {
+                toast({
+                  title: "Warning",
+                  description: "Order created but failed to add some items.",
+                  variant: "destructive",
+                });
+              }
             }
               // After items are inserted, send WhatsApp order confirmation including items
               try {
@@ -749,13 +750,33 @@ export function OrderForm({ trigger, onSuccess }: OrderFormProps) {
                       </div>
                       <div>
                         <label className="text-xs text-muted-foreground">Qty</label>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={item.quantity}
-                          onChange={(e) => handleUpdateQuantity(item.id, e.target.value)}
-                          className="mt-1"
-                        />
+                          <Input
+                            type="number"
+                            min={0}
+                            value={qtyEdits[item.id] ?? String(item.quantity)}
+                            onChange={(e) => setQtyEdits((p) => ({ ...p, [item.id]: e.target.value }))}
+                            onBlur={() => {
+                              const pending = qtyEdits[item.id];
+                              handleUpdateQuantity(item.id, pending !== undefined ? pending : String(item.quantity));
+                              setQtyEdits((p) => {
+                                const copy = { ...p };
+                                delete copy[item.id];
+                                return copy;
+                              });
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                const pending = qtyEdits[item.id];
+                                handleUpdateQuantity(item.id, pending !== undefined ? pending : String(item.quantity));
+                                setQtyEdits((p) => {
+                                  const copy = { ...p };
+                                  delete copy[item.id];
+                                  return copy;
+                                });
+                              }
+                            }}
+                            className="mt-1"
+                          />
                       </div>
                       <div>
                         <label className="text-xs text-muted-foreground">Total</label>
